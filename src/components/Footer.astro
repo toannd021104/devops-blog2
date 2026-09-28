@@ -1,0 +1,30 @@
+---
+import { SITE } from "@/consts";
+const year = new Date().getFullYear();
+---
+
+<footer class="mt-24 border-t border-[var(--color-border)]">
+  <div
+    class="mx-auto flex max-w-5xl flex-col items-center justify-between gap-4 px-4 py-10 text-sm text-[var(--color-muted)] sm:flex-row sm:px-6"
+  >
+    <p class="font-display font-semibold text-[var(--color-fg)]">
+      Toan Nguyen<span class="text-[var(--color-accent)]">.</span>devops
+    </p>
+    <p class="font-mono text-xs">© {year} — built with too much coffee.</p>
+    <div class="flex gap-5 font-mono text-xs">
+      <a
+        href={SITE.socials.github}
+        target="_blank"
+        rel="noopener noreferrer"
+        class="transition-colors hover:text-[var(--color-accent)]">github</a
+      >
+      <a
+        href={SITE.socials.linkedin}
+        target="_blank"
+        rel="noopener noreferrer"
+        class="transition-colors hover:text-[var(--color-accent)]">linkedin</a
+      >
+      <a href="/rss.xml" class="transition-colors hover:text-[var(--color-accent)]">rss</a>
+    </div>
+  </div>
+</footer>

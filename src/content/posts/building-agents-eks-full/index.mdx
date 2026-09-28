@@ -1,0 +1,795 @@
+---
+title: "Building Agents on Amazon EKS - Trọn bộ 6 phần"
+excerpt: "Loạt bài gộp đầy đủ: xây một customer service agent trên Amazon EKS và bồi thêm một khả năng sau mỗi phần — first agent, MCP tools, observability, security, AI gateway và sandbox chạy code cô lập."
+category: "Kubernetes"
+date: "Sep 24, 2026"
+pubDate: 2026-09-24
+readTime: "45 min read"
+cover: "./cover.svg"
+coverAlt: "Ảnh bìa: Building Agents on Amazon EKS trọn bộ 6 phần"
+tags: ["kubernetes", "eks", "ai", "aws", "bedrock", "mcp", "agentgateway", "langfuse"]
+featured: true
+problem: "Một customer service agent chạy được là một chuyện; đưa nó lên production lại kéo theo cả loạt câu hỏi: ai giữ credential model, làm sao trace một câu trả lời chậm, tool nên sống ở đâu, persona nào được gọi tool nào, và chạy code do LLM sinh ra sao cho an toàn? Loạt bài này đi qua từng câu hỏi đó bằng cách xây một agent thật trên Amazon EKS và bồi thêm đúng một khả năng sau mỗi phần."
+takeaways:
+  - "Bốn khái niệm Strands (Agent, Model, Tools, System prompt) đủ để dựng một agent loop hoàn chỉnh, mọi cấu hình đến từ environment."
+  - "Đưa tool ra sau MCP + agentgateway tạo một control point để phân quyền từng tool call theo persona mà không sửa code agent."
+  - "Observability bằng OpenTelemetry + Langfuse cho một trace duy nhất trải khắp agent, tool và gateway nhờ header traceparent."
+  - "AI Gateway giữ AWS identity nên agent không cầm credential Bedrock; sandbox microVM air-gapped cho phép chạy code không tin cậy an toàn."
+---
+
+import { Image } from "astro:assets";
+import img13 from "./image-13.png";
+import img14 from "./image-14.png";
+import img15 from "./image-15.png";
+import img16 from "./image-16.png";
+import img17 from "./image-17.png";
+import img18 from "./image-18.png";
+import img19 from "./image-19.png";
+import img20 from "./image-20.png";
+import img21 from "./image-21.png";
+import img22 from "./image-22.png";
+import img23 from "./image-23.png";
+import img24 from "./image-24.png";
+import img25 from "./image-25.png";
+import img26 from "./image-26.png";
+import img27 from "./image-27.png";
+import img28 from "./image-28.png";
+import img29 from "./image-29.png";
+import img30 from "./image-30.png";
+import img31 from "./image-31.png";
+import img32 from "./image-32.png";
+import img33 from "./image-33.png";
+import img34 from "./image-34.png";
+import img35 from "./image-35.png";
+import img36 from "./image-36.png";
+import img37 from "./image-37.png";
+import img40 from "./image-40.png";
+import img42 from "./image-42.png";
+import img43 from "./image-43.png";
+import img44 from "./image-44.png";
+import img45 from "./image-45.png";
+import img46 from "./image-46.png";
+import img47 from "./image-47.png";
+import img48 from "./image-48.png";
+import img49 from "./image-49.png";
+import img50 from "./image-50.png";
+import img51 from "./image-51.png";
+import img52 from "./image-52.png";
+import img53 from "./image-53.png";
+import img54 from "./image-54.png";
+import img55 from "./image-55.png";
+import img56 from "./image-56.png";
+import img57 from "./image-57.png";
+import img58 from "./image-58.png";
+import img59 from "./image-59.png";
+import img60 from "./image-60.png";
+import img61 from "./image-61.png";
+import img62 from "./image-62.png";
+
+> Đây là bản gộp đầy đủ của loạt bài mình ghi lại khi làm workshop **Building Agents on Amazon EKS**. Xuyên suốt loạt bài, mình xây một customer service agent cho AnyCompany Shop và bồi thêm một khả năng mới sau mỗi phần. Thứ tự trình bày dưới đây đi theo mạch mình thấy dễ hiểu nhất: dựng agent → đưa tool ra MCP → quan sát bằng trace → siết bảo mật → hiểu gateway → và cuối cùng là chạy code trong sandbox.
+
+Sáu phần, sáu khả năng chồng lên nhau:
+
+| Phần | Khả năng | Agent hưởng lợi gì |
+| --- | --- | --- |
+| 1. First agent | Core loop | Nhận query, suy luận, gọi tool, trả lời |
+| 2. Tools với MCP | Tool trên mạng | Dời tool ra MCP server, khám phá lúc runtime |
+| 3. Observability | Trace | Nhìn xuyên mọi LLM call và tool call trong Langfuse |
+| 4. Securing | Phân quyền | Ép per-tool access theo persona đã đăng nhập |
+| 5. The AI Gateway | Control point | Hiểu endpoint model mà mọi thứ đi qua |
+| 6. Sandbox | Chạy code an toàn | Đẩy code không tin cậy sang microVM cô lập |
+
+---
+
+# Phần 1 — Building your first agent
+
+> Deploy agent đầu tiên cho AnyCompany Shop, xây bằng **Strands Agents SDK**. Lời gọi model của nó tới Amazon Bedrock qua Envoy AI Gateway.
+
+## Kiến trúc
+
+<Image src={img18} alt="First agent flow: query từ Chainlit UI tới Strands Agent, OpenAI wire format tới Envoy AI Gateway, Converse API với SigV4 Pod Identity tới Bedrock, và tool lookup_order đọc DynamoDB" />
+
+Agent không bao giờ gọi Bedrock trực tiếp và không giữ credential Bedrock. Nó gửi một request chat-completions bình thường tới gateway, và gateway sở hữu AWS identity (SigV4 qua EKS Pod Identity) rồi dịch sang Converse API của Bedrock. Đổi model (Nova sang Claude) là đổi một dòng `MODEL_ID`, không phải đổi code.
+
+> **💡 Giải thích:** Agent chính là vòng lặp: nhận câu hỏi → hỏi model → nếu model bảo "gọi tool" thì gọi → đưa kết quả lại cho model → trả lời khách.
+
+### Strands SDK là gì?
+
+Một Python SDK mã nguồn mở để xây agent. LLM quyết định gọi tool nào và theo thứ tự nào. Bốn khái niệm gánh cả SDK:
+
+- **Agent**: vòng lặp gửi message tới LLM và thực thi tool call
+- **Model**: bất kỳ endpoint nào nói chat-completions API. Ở đây là Envoy AI Gateway trước Bedrock
+- **Tools**: hàm Python gắn decorator `@tool` mà agent có thể gọi
+- **System prompt**: chỉ dẫn định hình hành vi agent
+
+### Code walkthrough
+
+Mọi giá trị đến từ environment, nên cùng một image chạy ở đâu cũng được:
+
+```python
+model_base_url = os.environ.get("MODEL_BASE_URL", "http://localhost:4000/v1")
+
+model = OpenAIModel(
+    client_args={
+        "base_url": model_base_url,
+        "api_key": os.environ.get("MODEL_API_KEY", "not-needed"),
+    },
+    model_id=os.environ.get("MODEL_ID", "nova-lite"),
+    params={"max_tokens": 1024, "temperature": 0.3},
+)
+```
+
+- `base_url`: `MODEL_BASE_URL` trỏ tới Envoy AI Gateway, cấp bởi ConfigMap `agent-config`.
+- `api_key="not-needed"`: gateway tự xác thực với Bedrock bằng identity của nó qua Pod Identity.
+- `model_id="nova-lite"`: một alias mà gateway rewrite sang model id Bedrock thật.
+
+> **💡 Giải thích:** Cả ba giá trị đều đọc từ biến môi trường chứ không hardcode — nguyên tắc 12-factor: cấu hình tách khỏi code.
+
+### Deploy to EKS
+
+`k8s.yaml` là một Deployment cộng một ClusterIP Service ở port 8080. Hai chi tiết wiring gánh việc nặng:
+
+- `serviceAccountName: agent` cấp quyền truy cập DynamoDB qua Pod Identity (cho `lookup_order`)
+- `envFrom: agent-config` là ConfigMap đưa `MODEL_BASE_URL`, `MODEL_ID`, `ORDERS_TABLE` vào container tự động
+
+Image ref dùng placeholder, nên render bằng `envsubst` trước khi apply:
+
+```bash
+cd ~/environment/modules/200-strands-agents/customer-agent
+envsubst < k8s.yaml | kubectl apply -f -
+kubectl rollout status deployment/customer-agent --timeout=120s
+```
+
+<Image src={img19} alt="Kết quả rollout deployment customer-agent" />
+
+### Chat with it
+
+Mở URL từ banner, đăng nhập với vai Support Associate, rồi thử:
+
+```text
+Hi, I ordered a laptop last week and it still hasn't arrived. My order ID is ORD-1001. Can you help?
+
+I want to know the status of the mechanical keyboard from Order ORD-1005.
+
+Can you check on order ORD-99999?
+```
+
+> **💡 Giải thích:** Câu 1 test đường thành công (đơn có thật), câu 2 test đơn ở status đặc biệt, câu 3 test lỗi (đơn không tồn tại). Test đủ cả đường thành công lẫn thất bại là thói quen tốt khi kiểm thử agent.
+
+**Kết phần 1:** một Strands agent loop xử lý hội thoại customer service, model call qua Envoy AI Gateway, và một tool `lookup_order` đọc DynamoDB qua Pod Identity.
+
+---
+
+# Phần 2 — Agent tools với MCP
+
+> Đến giờ mọi tool đều sống bên trong process của agent. Ở phần này mình dời tool ra một MCP server độc lập mà agent khám phá lúc runtime, và định tuyến mọi tool call qua **agentgateway**.
+
+### MCP là gì?
+
+**Model Context Protocol** là một chuẩn mở để expose tool cho agent qua mạng. Một MCP server publish một tập tool; một MCP client (ở đây là Strands agent) kết nối, gọi `list_tools` để khám phá cái gì có sẵn, và gọi chúng theo tên. Agent không import code tool; nó học tool lúc runtime từ server.
+
+> **💡 Giải thích:** Trước đây tool là "hàm nằm trong người agent". Với MCP, tool trở thành "dịch vụ chạy riêng trên mạng" mà agent gọi qua giao thức chuẩn.
+
+**Bốn thứ bạn được khi đưa tool lên mạng:**
+
+- **Decoupled**: logic tool ở một chỗ, đổi một lần thay vì phải roll ra mọi agent nhúng nó.
+- **Discoverable**: thêm tool vào server và agent nhặt nó ở lần connect kế tiếp.
+- **Shareable**: nhiều agent dùng chung một tool server.
+- **Một control point**: một proxy ở giữa (agentgateway) thấy và phân quyền từng tool call.
+
+### agentgateway là gì?
+
+Tool call đi qua **agentgateway**, một MCP gateway: proxy nói được giao thức, nên thấy được từng operation `tools/list` và `tools/call`. Đó là thứ làm cho per-tool authorization khả thi.
+
+```bash
+kubectl get pods,svc -n agentgateway-system
+```
+
+<Image src={img27} alt="Pods và service của agentgateway" />
+
+### Kiến trúc
+
+<Image src={img28} alt="MCP lab flow: agent forward Cognito Bearer token qua MCP qua agentgateway tới MCP server mà order tools đọc DynamoDB, trong khi local search_products query Milvus và LLM call chảy qua Envoy AI Gateway tới Bedrock" />
+
+MCP server giữ quyền truy cập DynamoDB mà order tool của nó cần. Tool đã dời, đường dữ liệu của nó thì không.
+
+### Code walkthrough
+
+<details>
+<summary><strong>mcp-server/server.py — định nghĩa tool</strong></summary>
+
+```python
+mcp = FastMCP(
+    "AnyCompany Tools",
+    transport_security=TransportSecuritySettings(enable_dns_rebinding_protection=False),
+)
+
+@mcp.tool()
+def lookup_order(order_id: str) -> dict:
+    """Look up order status, tracking, and details by order ID."""
+    ...
+
+@mcp.tool()
+def check_inventory(product_name: str) -> dict:
+    """Check stock availability for a product."""
+    ...
+```
+
+FastMCP biến hàm Python thường thành MCP tool. Decorator `@mcp.tool()` là bản đối ứng phía server của `@tool` bên Strands. Server chạy như `streamable_http_app()` trên port 8080.
+</details>
+
+<details>
+<summary><strong>Forward token của user theo session</strong></summary>
+
+MCP server ngồi sau agentgateway, cái này (ở phần Securing) phân quyền mỗi tool call theo Cognito persona của caller, nên tool call phải mang identity của user:
+
+```python
+# server.py: rút token đã forward, dựng/cache agent theo session
+access_token = authorization[7:] if authorization.lower().startswith("bearer ") else None
+agent = _get_session_agent(req.session_id, access_token)
+
+# agent.py: MCP client của session connect KÈM token đó
+headers = {"Authorization": f"Bearer {access_token}"} if access_token else None
+client = MCPClient(lambda u=url: streamablehttp_client(u, headers=headers))
+```
+</details>
+
+> **💡 Giải thích:** Vì mỗi user có token riêng, agent không thể là một instance dùng chung toàn cục. Mỗi phiên chat tạo một agent riêng mang token của chính user đó.
+
+### Deploy the MCP server
+
+```bash
+cd ~/environment/modules/500-agent-tools-mcp/mcp-server
+envsubst < k8s.yaml | kubectl apply -f -
+kubectl rollout status deployment/mcp-server --timeout=120s
+```
+
+<Image src={img29} alt="Rollout deployment mcp-server" />
+
+Xác nhận agentgateway chấp nhận route:
+
+```bash
+kubectl get httproute mcp -o jsonpath='{.status.parents[0].conditions[?(@.type=="Accepted")].status}{"\n"}'
+```
+
+<Image src={img30} alt="Trạng thái Accepted của HTTPRoute mcp" />
+
+### Deploy the agent
+
+<details>
+<summary><strong>Agent mất quyền gì</strong></summary>
+
+```yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: customer-agent      # không Pod Identity association: không AWS access
+---
+# ...Deployment...
+      serviceAccountName: customer-agent
+      env:
+        - name: MODEL_BASE_URL
+          valueFrom:
+            configMapKeyRef: { name: agent-config, key: MODEL_BASE_URL }
+        # ...chỉ các key được đặt tên: không ORDERS_TABLE, không AWS_REGION...
+```
+
+Agent chạy như `customer-agent`, không có Pod Identity association, nên pod không giữ quyền AWS nào. ServiceAccount `agent` vẫn mang role DynamoDB, và pod mcp-server dùng nó.
+</details>
+
+> **💡 Giải thích:** Đây là ví dụ đẹp của **least privilege đi theo code**: khả năng (đọc DynamoDB) dời sang MCP server, nên quyền cũng dời theo.
+
+```bash
+cd ~/environment/modules/500-agent-tools-mcp/customer-agent
+envsubst < k8s.yaml | kubectl apply -f -
+kubectl rollout status deployment/customer-agent --timeout=120s
+```
+
+<Image src={img31} alt="Rollout agent bản mcp" />
+
+<Image src={img32} alt="Log khởi động của agent" />
+
+Seed collection Milvus cho tool local `search_products` (RAG bằng vector search):
+
+```bash
+kubectl exec -i deploy/customer-agent -- python - < seed_products.py
+```
+
+### Chat with it
+
+```text
+Where is my order ORD-1001?
+```
+
+<Image src={img33} alt="Kết quả query lookup_order" />
+
+```text
+Do you have the Mechanical Keyboard in stock?
+
+I want to return the wireless mouse from order ORD-1002.
+
+What do you have for cutting down background noise on calls?
+```
+
+Ba câu đầu hit `lookup_order`, `check_inventory`, `initiate_return` qua MCP server. Câu thứ tư hit local `search_products` — vector search trả về noise cancelling headphones dù không trùng chữ.
+
+```bash
+kubectl logs deploy/customer-agent | grep "Discovered"
+```
+
+<Image src={img34} alt="Log discovery các MCP tool" />
+
+```text
+Discovered 3 MCP tools at http://agentgateway.agentgateway-system.svc.cluster.local/mcp: ['lookup_order', 'check_inventory', 'initiate_return']
+```
+
+**Kết phần 2:** tool dời ra MCP server độc lập, route qua agentgateway (network control point), và agent per-session forward Cognito token trên mỗi MCP call.
+
+---
+
+# Phần 3 — Observability với Langfuse
+
+> Agent hiện là hộp đen: khi trả lời chậm hoặc sai, bạn không thấy được model call hay tool invocation nào gây ra. Ở phần này mình instrument agent bằng OpenTelemetry và đọc trace trong Langfuse.
+
+Hai thành phần đã chạy sẵn trong cluster: Langfuse và một OpenTelemetry Collector chung mà mọi workload export tới.
+
+```bash
+kubectl get pods,svc -n telemetry
+kubectl get pods -n langfuse
+```
+
+<Image src={img20} alt="Pods và service trong namespace telemetry và langfuse" />
+
+> **💡 Giải thích:** Trace là bản ghi chi tiết một request đi qua những đâu, mất bao lâu mỗi chặng. Với agent AI, trace cho thấy model đã quyết định gọi tool nào, tốn bao nhiêu token, chặng nào chậm.
+
+### Khác gì so với phần trước
+
+Code agent gần như giống hệt. Ba thứ được thêm để trace chảy:
+
+- Một Langfuse client trong `agent.py` xác thực lúc khởi động và flush span sau mỗi request.
+- OpenTelemetry auto-instrumentation trong image (Dockerfile chạy app bằng `opentelemetry-instrument`, patch `httpx` và FastAPI mà không đổi code).
+- Export target: ConfigMap `agent-config` set `OTEL_EXPORTER_OTLP_ENDPOINT` tới collector chung.
+
+> **💡 Giải thích:** Bạn gần như **không viết thêm code** để có tracing. `opentelemetry-instrument` tự "chèn" đo đạc vào các thư viện có sẵn lúc chạy — auto-instrumentation.
+
+### Vì sao span của gateway nằm chung một trace
+
+Header `traceparent` là phần quan trọng. Envoy AI Gateway đọc nó ở mỗi request, nên span của nó lồng dưới trace của agent thay vì bắt đầu một trace riêng.
+
+### Kiến trúc
+
+<Image src={img21} alt="Observability flow: FastAPI span root trace ở agent, LLM call mang traceparent tới Envoy AI Gateway mà span ChatCompletion lồng dưới nó, cả hai export tới OTel Collector — egress xác thực duy nhất tới Langfuse" />
+
+### Deploy the instrumented agent
+
+```bash
+cd ~/environment/modules/300-observability-langfuse/customer-agent
+envsubst < k8s.yaml | kubectl apply -f -
+kubectl rollout status deployment/customer-agent --timeout=120s
+```
+
+<Image src={img22} alt="Rollout deployment customer-agent bản langfuse" />
+
+<Image src={img23} alt="Các biến môi trường tracing của pod" />
+
+Xác nhận Langfuse client đã xác thực (agent chạy `auth_check()` lúc khởi động):
+
+```bash
+kubectl logs deploy/customer-agent | grep Langfuse
+```
+
+<Image src={img24} alt="Log xác nhận Langfuse connected" />
+
+```text
+Langfuse connected successfully
+```
+
+### Read the trace in Langfuse
+
+Gửi một query kích hoạt tool call, rồi mở **Tracing > Traces** trong Langfuse và chuyển view sang **Timeline**. Bạn đang nhìn bốn thứ:
+
+- `POST /chat`, root — request FastAPI vào.
+- Chat generation của agent, mang model, token counts, latency.
+- Tool call `lookup_order`, với input và kết quả DynamoDB.
+- Một span `ChatCompletion`, là gateway report cùng model call từ phía nó.
+
+<Image src={img25} alt="Trace của Langfuse dưới chế độ timeline" />
+
+Gửi query "đơn không tồn tại" và so sánh: tool span hiện kết quả not-found, model chọn xin lỗi thay vì bịa ra một đơn.
+
+<Image src={img26} alt="So sánh trace của query đơn không tồn tại" />
+
+> **💡 Giải thích:** Một **trace** trả lời "vì sao câu này chậm", còn **dashboard** trả lời "câu chậm có phải chuyện bình thường không". Một cái zoom-in, một cái zoom-out.
+
+**Kết phần 3:** cùng agent, giờ phát OpenTelemetry trace tới Langfuse; một trace duy nhất mỗi request trải khắp agent, tool call và Envoy AI Gateway nhờ `traceparent`.
+
+---
+
+# Phần 4 — Securing the agents
+
+> Ở phần MCP, agent bắt đầu forward Cognito token của user trên mỗi tool call, nhưng không gì kiểm tra nó. Cả hai persona đều gọi được mọi tool. Ở phần này mình biến token đó thành access control thật.
+
+### Hai persona, quyền khác nhau
+
+| Persona | Group | Được phép |
+| --- | --- | --- |
+| Support Associate | support-associate | Tra cứu đơn và xử lý trả hàng |
+| Sales Analyst | sales-analyst | Chỉ tra cứu đơn |
+
+| Tool | Cho phép với | Lý do |
+| --- | --- | --- |
+| lookup_order | Cả hai persona | Read-only, dùng chung |
+| initiate_return | Chỉ Support Associate | Thay đổi một đơn |
+| check_inventory | Không ai, ở lab này | Minh họa deny-by-default |
+
+> **💡 Giải thích:** Chia làm hai lớp: **authentication** (anh là ai) và **authorization** (anh được làm gì). Cả hai đặt ở gateway, nên agent hoàn toàn không biết gì về bảo mật.
+
+<details>
+<summary><strong>Authentication (mcp-authn) gắn vào Gateway</strong></summary>
+
+```yaml
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: mcp-authn
+  namespace: agentgateway-system
+spec:
+  targetRefs:
+    - kind: Gateway
+      name: agentgateway
+      group: gateway.networking.k8s.io
+  traffic:
+    jwtAuthentication:
+      mode: Strict            # không token, không vào
+      providers:
+        - issuer: __COGNITO_ISSUER__
+          audiences:
+            - __COGNITO_CLIENT_ID__
+          jwks:
+            remote:
+              backendRef:
+                group: agentgateway.dev
+                kind: AgentgatewayBackend
+                name: cognito-jwks
+                namespace: agentgateway-system
+                port: 443
+              jwksPath: __COGNITO_JWKS_PATH__
+```
+
+Token thiếu hoặc không hợp lệ bị từ chối 401 trước khi bất kỳ logic tool nào chạy.
+</details>
+
+<details>
+<summary><strong>Authorization (mcp-tool-authz) gắn vào backend</strong></summary>
+
+```yaml
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: mcp-tool-authz
+  namespace: default
+spec:
+  targetRefs:
+    - kind: AgentgatewayBackend
+      name: mcp-backend
+      group: agentgateway.dev
+  backend:
+    mcp:
+      authorization:
+        action: Allow
+        policy:
+          matchExpressions:
+            - 'false'         # match không gì: deny-all của Step A
+```
+
+`matchExpressions` là thứ duy nhất đổi qua ba bước; mọi thứ phía trên giữ nguyên.
+</details>
+
+> **💡 Giải thích:** `action: Allow` nhưng biểu thức `'false'` (không match gì) lại **cấm tất cả**, vì agentgateway là **deny-by-default**.
+
+### Kiến trúc
+
+<Image src={img35} alt="Securing flow: token Cognito của persona đi từ Chainlit UI qua agent tới agentgateway, nơi mcp-authn validate JWT với JWKS của Cognito và mcp-tool-authz kiểm cognito theo từng tool trước khi call tới được MCP server" />
+
+### Điền giá trị Cognito của event này
+
+```bash
+cd ~/environment/modules/700-agentgateway-authz
+TFDIR="$HOME/environment/terraform"
+ISSUER=$(terraform -chdir="$TFDIR" output -raw cognito_issuer)
+JWKS_HOST=$(terraform -chdir="$TFDIR" output -raw cognito_jwks_host)
+JWKS_PATH=$(terraform -chdir="$TFDIR" output -raw cognito_jwks_path)
+CLIENT=$(terraform -chdir="$TFDIR" output -raw cognito_client_id)
+
+render() {
+  sed -e "s|__COGNITO_ISSUER__|$ISSUER|g" \
+      -e "s|__COGNITO_JWKS_HOST__|$JWKS_HOST|g" \
+      -e "s|__COGNITO_JWKS_PATH__|$JWKS_PATH|g" \
+      -e "s|__COGNITO_CLIENT_ID__|$CLIENT|g" "$1"
+}
+```
+
+<Image src={img36} alt="Đọc bốn Terraform output cho Cognito" />
+
+### Arc ba bước
+
+> **💡 Giải thích:** Cùng một câu hỏi ("trả wireless mouse của ORD-1002"), sau mỗi policy kết quả đổi — từ bị cấm hoàn toàn → tra được đơn nhưng chưa trả được → trả được.
+
+#### Step A: authenticate mọi call và deny mọi tool
+
+```bash
+render policies/step1-deny-all.yaml | kubectl apply -f -
+```
+
+<Image src={img37} alt="Apply policy deny-all" />
+
+```text
+I want to return the wireless mouse from order ORD-1002.
+```
+
+<Image src={img42} alt="Agent bị deny mọi tool" />
+
+Agent trả lời rằng nó không có quyền xử lý trả hàng. Chú ý **denial im lặng**: không lỗi trong chat, chỉ là một agent không có tool.
+
+<Image src={img43} alt="Trace Langfuse dưới deny-all: tools/list trả về không tool" />
+
+#### Step B: allow tool dùng chung
+
+```bash
+render policies/step2-allow-lookup.yaml | kubectl apply -f -
+```
+
+<Image src={img40} alt="Apply policy allow-lookup" />
+
+```yaml
+matchExpressions:
+  - 'mcp.tool.name == "lookup_order"'
+```
+
+<Image src={img44} alt="Agent tra được đơn nhưng chưa trả được" />
+
+Agent giờ tra `ORD-1002` nhưng vẫn chưa xử lý trả hàng được.
+
+<Image src={img45} alt="Trace cho thấy lookup_order tới được MCP server" />
+
+#### Step C: phân biệt theo persona
+
+```bash
+render policies/step3-differentiate.yaml | kubectl apply -f -
+```
+
+```yaml
+matchExpressions:
+  - 'mcp.tool.name == "lookup_order"'
+  - 'mcp.tool.name == "initiate_return" && "support-associate" in jwt["cognito:groups"]'
+```
+
+<Image src={img46} alt="Apply policy differentiate" />
+
+<Image src={img47} alt="Agent trả hàng thành công với vai Support Associate" />
+
+Đăng nhập vai Sales Analyst và gửi cùng tin nhắn: agent tra được đơn nhưng báo không xử lý trả hàng được.
+
+<Image src={img48} alt="Discovery log của hai persona" />
+
+```bash
+kubectl logs deployment/customer-agent --tail=100 | grep Discovered
+```
+
+<Image src={img49} alt="Hai dòng discovery: Support Associate có initiate_return, Sales Analyst không" />
+
+```text
+Discovered 2 MCP tools ...: ['lookup_order', 'initiate_return']
+Discovered 1 MCP tools ...: ['lookup_order']
+```
+
+> **💡 Giải thích:** Cùng một agent, cùng code, nhưng hai persona **khám phá ra hai danh sách tool khác nhau** — vì gateway ẩn tool không được phép ngay từ bước `tools/list`.
+
+**Kết phần 4:** authentication (Cognito JWT) và per-tool authorization theo persona ở agentgateway, deny-by-default. Enforcement thuần policy: agent và MCP server không đổi.
+
+---
+
+# Phần 5 — The AI Gateway
+
+> Mọi lời gọi model đến giờ đều đi qua Envoy AI Gateway. Phần này dừng lại để hiểu rõ endpoint đó: platform team dựng nó trước Bedrock để giải quyết ba câu hỏi — ai giữ credential, ai quản tên model, ai thấy được chi phí.
+
+## Kiến trúc tổng thể
+
+<Image src={img13} alt="Building Agents platform: khách hàng tới Chainlit UI, gọi Strands Agent; agent tới Amazon Bedrock qua Envoy AI Gateway" />
+
+Mỗi lời gọi model đều được Amazon Bedrock phục vụ và đi qua **Envoy AI Gateway**, một proxy chạy trong cluster. Code agent không bao giờ nói chuyện trực tiếp với Bedrock và không mang credential của Bedrock.
+
+> **💡 Giải thích:** Hãy hình dung gateway như một "lễ tân" đứng giữa agent và Bedrock. Agent chỉ cần đưa yêu cầu, còn việc chứng minh danh tính với AWS (ký SigV4) do lễ tân lo.
+
+### What is already running
+
+Gateway chạy trong namespace `envoy-gateway-system` dưới dạng một Service tên `ai-gateway`:
+
+```bash
+kubectl get svc ai-gateway -n envoy-gateway-system
+```
+
+<Image src={img14} alt="Service ai-gateway trong namespace envoy-gateway-system" />
+
+Nó nhận request ở hai định dạng và dịch cả hai sang Converse API của Bedrock: OpenAI trên `/v1/chat/completions` và Anthropic Messages trên `/anthropic/v1/messages`.
+
+### Model aliases
+
+Gateway giữ một bảng ánh xạ tên thân thiện sang model id thật của Bedrock:
+
+```text
+nova-lite -> us.amazon.nova-2-lite-v1:0
+claude-sonnet -> us.anthropic.claude-sonnet-4-5-20250929-v1:0
+claude-haiku -> us.anthropic.claude-haiku-4-5-20251001-v1:0
+```
+
+<Image src={img15} alt="Bảng model alias mà gateway ánh xạ" />
+
+> **💡 Giải thích:** Alias giống "danh bạ": bạn gọi tên (`claude-sonnet`) chứ không nhớ số đầy đủ. Số đổi thì chỉ sửa danh bạ một chỗ.
+
+### Call it
+
+Gateway là ClusterIP nên phải gọi từ trong một pod:
+
+```bash
+kubectl run gw-test --rm -i --restart=Never --image=curlimages/curl -q -- \
+  curl -sS http://ai-gateway.envoy-gateway-system.svc.cluster.local/v1/chat/completions \
+  -H 'Content-Type: application/json' \
+  -d '{"model":"nova-lite","messages":[{"role":"user","content":"Say hi in 3 words"}]}' | jq
+```
+
+<Image src={img16} alt="Response completion từ gateway" />
+
+Đổi sang `claude-sonnet`, không gì khác thay đổi:
+
+<Image src={img17} alt="Cùng request nhưng đổi sang claude-sonnet" />
+
+> **💡 Giải thích:** Chỉ đổi một chữ (`nova-lite` → `claude-sonnet`), một provider hoàn toàn khác trả lời. Đó là giá trị thực tế của alias + gateway.
+
+**Kết phần 5:** platform team chạy một Envoy AI Gateway đứng trước Amazon Bedrock; model alias giữ tên model của provider ra khỏi code agent; gateway giữ AWS identity nên agent không mang credential Bedrock.
+
+---
+
+# Phần 6 — Agents using a sandbox
+
+> Các tool tới giờ trả lời câu hỏi cố định. Nhưng một Sales Analyst hỏi câu mở như "vẽ biểu đồ doanh số tháng trước theo region". Model cần viết code, chạy nó trên nhiều đơn, và hiện kết quả — an toàn.
+
+Mỗi lần thực thi có một máy ảo dùng-một-lần riêng, tạo qua **Kata Containers** với **Firecracker**. VM air-gapped, không mạng không credential, và bị huỷ sau một lần chạy. Runtime class tên `kata-fc`.
+
+> **💡 Giải thích:** Code do LLM sinh ra là **không đáng tin**. Giải pháp không phải kiểm duyệt code cho kỹ, mà chạy nó ở một nơi cô lập hoàn toàn: không mạng để tuồn dữ liệu, không credential để trộm, và bị xoá sạch sau mỗi lần.
+
+### Prerequisites
+
+```bash
+kubectl rollout status deployment/mcp-server
+kubectl get agentgatewaypolicy mcp-authn -n agentgateway-system
+```
+
+<Image src={img51} alt="Xác nhận hai prerequisites" />
+
+### The isolation model
+
+`run_python` không thực thi code trong agent. Nó gọi một broker (MCP server `code-executor`) mà: fetch một lát đơn có scope, claim một `kata-fc` microVM tươi, ghi row và code sinh ra vào đó thành file, chạy code, đọc lại kết quả, và huỷ microVM.
+
+<details>
+<summary><strong>Broker làm gì mỗi call</strong></summary>
+
+Mỗi call, broker:
+
+- dựng một DynamoDB query có scope, tham số hoá từ tham số đã validate,
+- fetch lát đơn có giới hạn đó (broker giữ read-only creds),
+- claim một `kata-fc` microVM pre-warmed từ pool và ghi row + code sinh ra vào đó thành file,
+- chạy code, đọc lại stdout và chart nếu có, rồi huỷ microVM.
+
+Pool là lý do việc này đủ nhanh để ngồi sau một tin nhắn chat.
+</details>
+
+<details>
+<summary><strong>Hai tính chất làm nó an toàn</strong></summary>
+
+- **microVM air-gapped.** NetworkPolicy của nó set `egress: []` và nó mount không ServiceAccount token.
+- **Dữ liệu vào out-of-band.** Row đơn ghi vào microVM thành file (`/app/orders.json`), không truyền qua LLM. Model viết code trên một schema được mô tả.
+</details>
+
+<details>
+<summary><strong>Giữ chart ngoài đường LLM</strong></summary>
+
+- `run_python` → broker → microVM: code lưu `/app/chart.png`
+- broker đọc PNG lại, cache, trả về một `chart_id` ngắn cho agent
+- agent fetch PNG từ broker (`GET /chart/{id}`) và stream tới UI
+- UI render chart inline
+
+Model chỉ bao giờ thấy một `chart_id`, không bao giờ ảnh base64.
+</details>
+
+> **💡 Giải thích:** Cả dữ liệu vào lẫn ảnh ra đều đi "đường vòng" (out-of-band), không qua LLM. Vừa tiết kiệm token, vừa giữ raw data ngoài context model.
+
+### Kiến trúc
+
+<Image src={img50} alt="Sandbox flow: request của Sales Analyst qua agentgateway nơi run_python được authorize chỉ cho persona đó, tới code-executor broker fetch một lát orders read-only từ DynamoDB và chạy code sinh ra trong một kata-fc microVM air-gapped" />
+
+### Deploy broker và authz của nó
+
+```bash
+cd ~/environment/modules/900-sandboxed-code-exec
+envsubst < code-executor-mcp/k8s.yaml | kubectl apply -f -
+kubectl rollout status deployment/code-executor-mcp --timeout=120s
+kubectl apply -f policies/run-python-authz.yaml
+```
+
+<Image src={img52} alt="Rollout code-executor-mcp" />
+
+<Image src={img53} alt="Policy code-mcp-tool-authz" />
+
+### Deploy agent
+
+```bash
+cd ~/environment/modules/900-sandboxed-code-exec/agent
+envsubst < k8s.yaml | kubectl apply -f -
+kubectl rollout status deployment/customer-agent --timeout=120s
+```
+
+<Image src={img55} alt="Rollout agent bản code-exec" />
+
+> **💡 Giải thích:** Agent "học" được khả năng mới (chạy code) mà **không sửa một dòng code nào** — chỉ cần trỏ nó tới thêm một MCP server. Đây là giá trị của kiến trúc MCP.
+
+### Xin một cái chart
+
+Mở chat UI và đăng nhập vai **Sales Analyst**:
+
+<Image src={img56} alt="Đăng nhập vai Sales Analyst" />
+
+```text
+Chart last month's sales by region.
+```
+
+<Image src={img54} alt="Chart doanh số theo region hiện inline trong chat" />
+
+Đăng nhập lại vai Support Associate rồi hỏi cùng câu: agentgateway ẩn `run_python` khỏi tool list của session support.
+
+<Image src={img57} alt="Support Associate không có bước code sandbox" />
+
+<Image src={img58} alt="Trace của request chart trong Langfuse" />
+
+### Verify the isolation
+
+```bash
+kubectl get pods -n agent-sandbox -l sandbox-kind=python -w
+```
+
+<Image src={img59} alt="Watch các sandbox pod" />
+
+```bash
+kubectl logs -n agent-sandbox -l sandbox-kind=python --prefix -f \
+  | grep -v '"GET / HTTP'
+```
+
+Hỏi thêm một câu chart: một pool pod bị claim, terminate vài giây sau, và một pod hoàn toàn mới xuất hiện thay chỗ.
+
+<Image src={img60} alt="Pod bị claim rồi terminate, pod mới thay thế" />
+
+<Image src={img61} alt="Log stream của pod sandbox" />
+
+Xác nhận air gap:
+
+```bash
+kubectl get networkpolicy kata-fc-python-airgap -n agent-sandbox \
+  -o jsonpath='{.spec}' | python3 -m json.tool
+```
+
+<Image src={img62} alt="NetworkPolicy air-gap với egress rỗng" />
+
+```text
+"egress": [],
+"policyTypes": ["Ingress", "Egress"]
+```
+
+> **💡 Giải thích:** `egress: []` nghĩa là microVM **không được phép gửi gói tin ra bất cứ đâu**. Dù code độc hại có chạy trong đó, nó không có mạng để tuồn dữ liệu và không có credential để lạm dụng.
+
+**Kết phần 6:** một tool `run_python` chạy code không tin cậy trong `kata-fc` microVM air-gapped dùng-một-lần, chart render inline với chart bytes giữ ngoài đường LLM, code execution scope cho persona Sales Analyst.
+
+---
+
+## Kết loạt bài
+
+Qua sáu phần, một customer service agent đơn giản đã tiến hoá thành một hệ thống có observability, dùng tool qua MCP, phân quyền theo persona, và chạy code không tin cậy trong sandbox cô lập — tất cả trên Amazon EKS, với AI Gateway làm control point cho mọi lời gọi model. Điều mình thích nhất ở loạt bài: mỗi khả năng mới hầu như chỉ là thêm một MCP server hoặc gắn một policy, chứ không phải viết lại agent.

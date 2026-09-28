@@ -1,0 +1,59 @@
+---
+import { Image } from "astro:assets";
+import type { Post } from "@/utils/posts";
+import { formatDate } from "@/utils/posts";
+
+interface Props {
+  post: Post;
+  /** featured = layout lớn, ngang; mặc định card đứng. */
+  featured?: boolean;
+}
+
+const { post, featured = false } = Astro.props;
+const { data } = post;
+const href = `/posts/${post.id}/`;
+---
+
+<article
+  class:list={[
+    "group",
+    featured && "sm:col-span-2 sm:grid sm:grid-cols-2 sm:gap-6 sm:items-center",
+  ]}
+>
+  <a href={href} class="block overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)]">
+    {
+      data.cover ? (
+        <Image
+          src={data.cover}
+          alt={data.coverAlt ?? data.title}
+          width={featured ? 800 : 640}
+          height={featured ? 450 : 360}
+          class="aspect-[16/9] w-full object-cover transition-transform duration-500 group-hover:scale-[1.03]"
+        />
+      ) : (
+        <div class="aspect-[16/9] w-full bg-[var(--color-accent-soft)]" />
+      )
+    }
+  </a>
+
+  <div class="mt-4">
+    <div class="flex items-center gap-3 text-xs font-medium text-[var(--color-muted)]">
+      <span class="rounded-full bg-[var(--color-accent-soft)] px-2.5 py-0.5 text-[var(--color-accent)]">
+        {data.category}
+      </span>
+      <time datetime={data.pubDate.toISOString()}>{formatDate(data.pubDate)}</time>
+      {data.readTime && <span aria-hidden="true">· {data.readTime}</span>}
+    </div>
+
+    <h2
+      class:list={[
+        "mt-2 font-display font-bold leading-snug text-[var(--color-fg)] transition-colors group-hover:text-[var(--color-accent)]",
+        featured ? "text-2xl sm:text-3xl" : "text-xl",
+      ]}
+    >
+      <a href={href}>{data.title}</a>
+    </h2>
+
+    <p class="mt-2 line-clamp-2 text-[var(--color-muted)]">{data.excerpt}</p>
+  </div>
+</article>

@@ -1,0 +1,31 @@
+---
+// "Bài học / quyết định thiết kế" - đặt CUỐI bài. Đúc kết + nêu lý do đằng sau.
+// Thiết kế: card có nền accent-soft, đánh số thứ tự để nhấn tính "rút ra được gì".
+interface Props {
+  takeaways: string[];
+}
+const { takeaways } = Astro.props;
+---
+
+{
+  takeaways.length > 0 && (
+    <aside class="not-prose mt-12 rounded-2xl bg-[var(--color-accent-soft)] p-6">
+      <p class="mb-4 flex items-center gap-2 font-display text-base font-bold text-[var(--color-fg)]">
+        <svg class="h-5 w-5 text-[var(--color-accent)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.3 1 2.3h6c0-1 .4-1.8 1-2.3A7 7 0 0 0 12 2z" />
+        </svg>
+        Bài học rút ra
+      </p>
+      <ol class="space-y-3">
+        {takeaways.map((item, i) => (
+          <li class="flex gap-3 text-[15px] leading-relaxed text-[var(--color-fg)]">
+            <span class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--color-accent)] text-xs font-bold text-[var(--color-accent-fg)]">
+              {i + 1}
+            </span>
+            <span>{item}</span>
+          </li>
+        ))}
+      </ol>
+    </aside>
+  )
+}

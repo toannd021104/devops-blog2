@@ -1,0 +1,46 @@
+---
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import Header from "@/components/Header.astro";
+import Footer from "@/components/Footer.astro";
+import { SITE } from "@/consts";
+
+const stack = [
+  "Kubernetes", "Terraform", "Docker", "AWS",
+  "Argo CD", "Prometheus", "Grafana", "GitLab CI",
+];
+---
+
+<BaseLayout title="Giới thiệu" description="Về Toan Nguyen và blog này.">
+  <Header />
+  <main class="mx-auto max-w-[var(--container-prose)] px-4 py-16 sm:px-6">
+    <h1 class="font-display text-3xl font-bold text-[var(--color-fg)]">Giới thiệu</h1>
+    <div class="prose prose-blog mt-6 max-w-none">
+      <p>
+        Mình là <strong>Toan Nguyen</strong> — DevOps Engineer đam mê xây dựng hệ thống
+        cloud-native. Blog này là nơi mình chia sẻ hands-on labs về Kubernetes, Terraform,
+        Docker, CI/CD, security và AI.
+      </p>
+      <p>Mình quan tâm việc học qua thực hành: dựng thật, phá thật, rồi troubleshoot thật.</p>
+    </div>
+
+    <h2 class="mt-10 font-display text-lg font-semibold text-[var(--color-fg)]">
+      Công nghệ mình dùng
+    </h2>
+    <div class="mt-4 flex flex-wrap gap-2">
+      {
+        stack.map((tech) => (
+          <span class="rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1 text-sm text-[var(--color-fg)]">
+            {tech}
+          </span>
+        ))
+      }
+    </div>
+
+    <div class="mt-10 flex flex-wrap gap-5 font-mono text-sm">
+      <a href={SITE.socials.github} target="_blank" rel="noopener noreferrer" class="text-[var(--color-accent)] hover:underline">github →</a>
+      <a href={SITE.socials.linkedin} target="_blank" rel="noopener noreferrer" class="text-[var(--color-accent)] hover:underline">linkedin →</a>
+      <a href={SITE.socials.email} class="text-[var(--color-accent)] hover:underline">email →</a>
+    </div>
+  </main>
+  <Footer />
+</BaseLayout>

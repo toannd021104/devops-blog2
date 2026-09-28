@@ -1,0 +1,34 @@
+---
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import Header from "@/components/Header.astro";
+import Footer from "@/components/Footer.astro";
+import { getAllTags } from "@/utils/posts";
+
+const tags = await getAllTags();
+---
+
+<BaseLayout title="Chủ đề" description="Duyệt bài viết theo chủ đề.">
+  <Header />
+  <main class="mx-auto max-w-5xl px-4 py-16 sm:px-6">
+    <h1 class="font-display text-3xl font-bold text-[var(--color-fg)]">Chủ đề</h1>
+    <p class="mt-2 text-[var(--color-muted)]">Duyệt bài viết theo chủ đề.</p>
+
+    {
+      tags.length === 0 ? (
+        <p class="mt-8 text-[var(--color-muted)]">Chưa có chủ đề nào.</p>
+      ) : (
+        <div class="mt-8 flex flex-wrap gap-3">
+          {tags.map(({ tag, count }) => (
+            <a
+              href={`/tags/${tag}/`}
+              class="rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-2 text-sm text-[var(--color-fg)] transition-colors hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
+            >
+              #{tag} <span class="text-[var(--color-muted)]">({count})</span>
+            </a>
+          ))}
+        </div>
+      )
+    }
+  </main>
+  <Footer />
+</BaseLayout>

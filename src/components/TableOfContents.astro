@@ -1,0 +1,61 @@
+---
+import type { MarkdownHeading } from "astro";
+
+interface Props {
+  headings: MarkdownHeading[];
+}
+
+// Chỉ lấy h2 và h3 cho gọn.
+const toc = Astro.props.headings.filter((h) => h.depth === 2 || h.depth === 3);
+---
+
+{
+  toc.length > 0 && (
+    <nav aria-label="Mục lục" class="text-sm">
+      <p class="mb-3 flex items-center gap-2 font-semibold text-[var(--color-accent)]">
+        <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <line x1="8" y1="6" x2="21" y2="6" /><line x1="8" y1="12" x2="21" y2="12" /><line x1="8" y1="18" x2="21" y2="18" /><line x1="3" y1="6" x2="3.01" y2="6" /><line x1="3" y1="12" x2="3.01" y2="12" /><line x1="3" y1="18" x2="3.01" y2="18" />
+        </svg>
+        Trong bài này
+      </p>
+      <ul class="space-y-1">
+        {toc.map((h) => (
+          <li class:list={[h.depth === 3 && "ml-3"]}>
+            <a
+              href={`#${h.slug}`}
+              data-toc-link={h.slug}
+              class="block rounded-md py-1 text-[var(--color-muted)] transition-colors hover:text-[var(--color-fg)]"
+            >
+              {h.text}
+            </a>
+          </li>
+        ))}
+      </ul>
+    </nav>
+  )
+}
+
+<script>
+  // Highlight mục đang xem trong viewport.
+  const links = document.querySelectorAll<HTMLAnchorElement>("[data-toc-link]");
+  const map = new Map<string, HTMLAnchorElement>();
+  links.forEach((l) => map.set(l.dataset.tocLink!, l));
+
+  const activeClass = ["text-[var(--color-accent)]", "font-semibold"];
+  const observer = new IntersectionObserver(
+    (entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) {
+          links.forEach((l) => l.classList.remove(...activeClass));
+          const link = map.get(entry.target.id);
+          link?.classList.add(...activeClass);
+        }
+      });
+    },
+    { rootMargin: "-10% 0% -70% 0%" },
+  );
+
+  document.querySelectorAll("article h2[id], article h3[id]").forEach((h) =>
+    observer.observe(h),
+  );
+</script>

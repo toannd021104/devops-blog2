@@ -1,0 +1,159 @@
+---
+import type { MarkdownHeading } from "astro";
+import { Image } from "astro:assets";
+import BaseLayout from "./BaseLayout.astro";
+import Header from "@/components/Header.astro";
+import Footer from "@/components/Footer.astro";
+import TableOfContents from "@/components/TableOfContents.astro";
+import ProblemCard from "@/components/ProblemCard.astro";
+import TakeawaysCard from "@/components/TakeawaysCard.astro";
+import type { Post } from "@/utils/posts";
+import { formatDate } from "@/utils/posts";
+
+interface Props {
+  post: Post;
+  headings: MarkdownHeading[];
+}
+
+const { post, headings } = Astro.props;
+const { data } = post;
+---
+
+<BaseLayout
+  title={data.title}
+  description={data.excerpt}
+  image={typeof data.cover === "object" ? data.cover.src : undefined}
+  type="article"
+  publishedTime={data.pubDate}
+>
+  <!-- Thanh tiến độ đọc -->
+  <div
+    id="reading-progress"
+    class="fixed left-0 top-0 z-50 h-0.5 w-0 bg-[var(--color-accent)] transition-[width] duration-75"
+  >
+  </div>
+
+  <Header />
+
+  <!--
+    Grid 3 cột đối xứng: [lề trái 1fr | nội dung wide | lề phải 1fr].
+    Cột giữa (container-wide) luôn nằm CHÍNH GIỮA trang vì hai lề bằng nhau.
+    Trong cột giữa: văn xuôi hẹp (container-prose) căn giữa, code/ảnh rộng full cột.
+    ToC đặt trong lề phải bằng position sticky, KHÔNG đẩy cột giữa lệch đi.
+  -->
+  <main class="px-4 py-10 sm:px-6">
+    <div class="mx-auto grid max-w-[100rem] grid-cols-1 lg:grid-cols-[1fr_minmax(0,var(--container-wide))_1fr]">
+      <!-- Cột giữa: toàn bộ nội dung bài -->
+      <div class="w-full min-w-0 lg:col-start-2">
+        <a
+          href="/"
+          class="mx-auto mb-8 flex max-w-[var(--container-prose)] items-center gap-2 text-sm font-medium text-[var(--color-muted)] transition-colors hover:text-[var(--color-accent)]"
+        >
+          <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <path d="M19 12H5M12 19l-7-7 7-7" />
+          </svg>
+          Tất cả bài viết
+        </a>
+
+        <!-- Header bài viết -->
+        <div class="mx-auto max-w-[var(--container-prose)]">
+          <div class="flex items-center gap-3 text-sm font-medium text-[var(--color-muted)]">
+            <span class="rounded-full bg-[var(--color-accent-soft)] px-2.5 py-0.5 text-[var(--color-accent)]">
+              {data.category}
+            </span>
+            <time datetime={data.pubDate.toISOString()}>{formatDate(data.pubDate)}</time>
+            {data.readTime && <span aria-hidden="true">· {data.readTime}</span>}
+          </div>
+          <h1 class="mt-4 font-display text-3xl font-bold leading-tight text-[var(--color-fg)] sm:text-4xl">
+            {data.title}
+          </h1>
+          <p class="mt-4 text-lg text-[var(--color-muted)]">{data.excerpt}</p>
+        </div>
+
+        {
+          data.cover && (
+            <div class="mx-auto mt-8 max-w-[var(--container-prose)]">
+              <Image
+                src={data.cover}
+                alt={data.coverAlt ?? data.title}
+                width={1200}
+                height={630}
+                class="aspect-[1200/630] w-full rounded-2xl border border-[var(--color-border)] object-cover"
+              />
+            </div>
+          )
+        }
+
+        <div class="mx-auto mt-10 max-w-[var(--container-prose)]">
+          <ProblemCard problem={data.problem} />
+        </div>
+
+        <article class="prose prose-blog mt-2 max-w-none">
+          <slot />
+        </article>
+
+        <div class="mx-auto max-w-[var(--container-prose)]">
+          <TakeawaysCard takeaways={data.takeaways} />
+        </div>
+
+        {
+          data.tags.length > 0 && (
+            <div class="mx-auto mt-10 flex max-w-[var(--container-prose)] flex-wrap gap-2 border-t border-[var(--color-border)] pt-6">
+              {data.tags.map((tag) => (
+                <a
+                  href={`/tags/${tag}/`}
+                  class="rounded-full border border-[var(--color-border)] px-3 py-1 text-sm text-[var(--color-muted)] transition-colors hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
+                >
+                  #{tag}
+                </a>
+              ))}
+            </div>
+          )
+        }
+      </div>
+
+      <!-- Lề phải: ToC sticky (chỉ hiện trên màn lớn) -->
+      <aside class="hidden lg:col-start-3 lg:block">
+        <div class="sticky top-24 pl-8">
+          <TableOfContents headings={headings} />
+        </div>
+      </aside>
+    </div>
+  </main>
+
+  <Footer />
+
+  <!-- Reading progress -->
+  <script>
+    const bar = document.getElementById("reading-progress");
+    const update = () => {
+      const h = document.documentElement;
+      const max = h.scrollHeight - h.clientHeight;
+      const pct = max > 0 ? (h.scrollTop / max) * 100 : 0;
+      if (bar) bar.style.width = pct + "%";
+    };
+    window.addEventListener("scroll", update, { passive: true });
+    update();
+  </script>
+
+  <!-- Nút copy cho mọi code block -->
+  <script>
+    document.querySelectorAll<HTMLPreElement>("article pre").forEach((pre) => {
+      pre.style.position = "relative";
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.textContent = "Copy";
+      btn.setAttribute("aria-label", "Sao chép code");
+      btn.className =
+        "absolute right-2 top-2 rounded-md border border-white/20 bg-black/30 px-2 py-1 text-xs font-mono text-white/80 opacity-0 transition-opacity hover:bg-black/50 focus-visible:opacity-100 group-hover:opacity-100";
+      pre.classList.add("group");
+      btn.addEventListener("click", async () => {
+        const code = pre.querySelector("code")?.textContent ?? "";
+        await navigator.clipboard.writeText(code.trimEnd());
+        btn.textContent = "Copied!";
+        setTimeout(() => (btn.textContent = "Copy"), 2000);
+      });
+      pre.appendChild(btn);
+    });
+  </script>
+</BaseLayout>

@@ -1,0 +1,23 @@
+---
+// "Vấn đề & vì sao" - đặt ĐẦU bài. Nêu bài toán để người đọc biết bài giải quyết gì.
+// Thiết kế: khối liền mạch, viền trái nhấn, giọng đặt vấn đề (không phải kết luận).
+interface Props {
+  problem?: string;
+}
+const { problem } = Astro.props;
+---
+
+{
+  problem && (
+    <aside class="not-prose my-8 rounded-r-xl border-l-4 border-[var(--color-accent)] bg-[var(--color-surface)] p-5">
+      <p class="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-[var(--color-accent)]">
+        <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <circle cx="12" cy="12" r="10" />
+          <path d="M12 16v-4M12 8h.01" />
+        </svg>
+        Vấn đề
+      </p>
+      <p class="text-[15px] leading-relaxed text-[var(--color-fg)]">{problem}</p>
+    </aside>
+  )
+}

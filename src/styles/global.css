@@ -1,0 +1,258 @@
+@import "tailwindcss";
+@plugin "@tailwindcss/typography";
+
+/* Dark mode dựa trên class .dark trên <html> (toggle bằng JS, tránh nhấp nháy) */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/*
+  Design system - "tạp chí kỹ thuật sạch"
+  Nền sáng, chữ to dễ đọc, một màu nhấn indigo, dark mode dịu mắt.
+  Token khai báo trong @theme để dùng như utility (bg-surface, text-accent...).
+*/
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-display: "Lexend", "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", monospace;
+
+  /* Bảng màu - light (mặc định) */
+  --color-bg: hsl(0 0% 100%);
+  --color-surface: hsl(220 20% 98%);
+  --color-border: hsl(220 16% 90%);
+  --color-fg: hsl(222 24% 16%);
+  --color-muted: hsl(220 10% 46%);
+  --color-accent: hsl(243 75% 59%);
+  --color-accent-fg: hsl(0 0% 100%);
+  --color-accent-soft: hsl(243 75% 96%);
+
+  /* Inline code dùng lại màu accent tím */
+  --color-code: hsl(243 75% 59%);
+  --color-code-soft: hsl(243 75% 96%);
+
+  /* Chiều rộng cột chữ đọc thoải mái (~72 ký tự). Code/ảnh/bảng sẽ tràn rộng hơn mức này. */
+  --container-prose: 46rem;
+  /* Mức tràn rộng cho code block, ảnh, bảng trên màn lớn */
+  --container-wide: 58rem;
+
+  /* Easing chuẩn cho motion (mạnh hơn built-in ease-out/in-out của CSS) */
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+}
+
+/* Override token cho dark mode */
+.dark {
+  --color-bg: hsl(222 28% 8%);
+  --color-surface: hsl(222 24% 12%);
+  --color-border: hsl(222 16% 22%);
+  --color-fg: hsl(220 20% 92%);
+  --color-muted: hsl(220 12% 60%);
+  --color-accent: hsl(243 90% 72%);
+  --color-accent-fg: hsl(222 40% 10%);
+  --color-accent-soft: hsl(243 40% 18%);
+
+  /* Inline code trong dark mode - tím sáng, nền tối dịu */
+  --color-code: hsl(243 90% 72%);
+  --color-code-soft: hsl(243 40% 18%);
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    background-color: var(--color-bg);
+    color: var(--color-fg);
+    font-family: var(--font-sans);
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  h1, h2, h3, h4, h5 {
+    font-family: var(--font-display);
+    letter-spacing: -0.02em;
+  }
+
+  /* Anchor offset cho heading khi nhảy tới từ ToC */
+  :target {
+    scroll-margin-top: 6rem;
+  }
+
+  /* Focus ring dễ thấy cho keyboard - accessibility */
+  :focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+}
+
+/*
+  Prose overrides: dùng @tailwindcss/typography làm nền, chỉnh lại màu theo
+  token để đọc thoải mái ở cả light lẫn dark. Áp bằng class .prose-blog.
+*/
+@layer components {
+  .prose-blog {
+    --tw-prose-body: var(--color-fg);
+    --tw-prose-headings: var(--color-fg);
+    --tw-prose-links: var(--color-accent);
+    --tw-prose-bold: var(--color-fg);
+    --tw-prose-counters: var(--color-muted);
+    --tw-prose-bullets: var(--color-accent);
+    --tw-prose-hr: var(--color-border);
+    --tw-prose-quotes: var(--color-fg);
+    --tw-prose-quote-borders: var(--color-accent);
+    --tw-prose-captions: var(--color-muted);
+    --tw-prose-code: var(--color-fg);
+    --tw-prose-th-borders: var(--color-border);
+    --tw-prose-td-borders: var(--color-border);
+    font-size: 1.0625rem;
+    line-height: 1.8;
+  }
+
+  .prose-blog :where(h2):not(:where([class~="not-prose"] *)) {
+    margin-top: 2.5em;
+    scroll-margin-top: 6rem;
+  }
+
+  .prose-blog :where(h3):not(:where([class~="not-prose"] *)) {
+    scroll-margin-top: 6rem;
+  }
+
+  /* Inline code: màu teal riêng, tách biệt với màu accent tím */
+  .prose-blog :where(code):not(:where([class~="not-prose"] *, pre code)) {
+    background-color: var(--color-code-soft);
+    color: var(--color-code);
+    padding: 0.15em 0.4em;
+    border-radius: 0.35rem;
+    font-weight: 600;
+    font-size: 0.875em;
+  }
+  .prose-blog :where(code):not(:where([class~="not-prose"] *))::before,
+  .prose-blog :where(code):not(:where([class~="not-prose"] *))::after {
+    content: none;
+  }
+
+  /* Code block (shiki): bo góc, viền */
+  .prose-blog :where(pre):not(:where([class~="not-prose"] *)) {
+    border: 1px solid var(--color-border);
+    border-radius: 0.75rem;
+    font-size: 0.875rem;
+    line-height: 1.7;
+  }
+
+  /*
+    Bố cục tối ưu đọc trên màn rộng:
+    - Văn xuôi (p, heading, list, blockquote) giữ hẹp ~container-prose, căn giữa cột.
+    - Code block, ảnh, bảng được phép rộng full cột (container-wide) để tận dụng không gian.
+  */
+  @media (min-width: 64rem) {
+    /* Mọi block con của prose mặc định hẹp lại và căn giữa */
+    .prose-blog > :where(*):not(:where([class~="not-prose"] *)) {
+      max-width: var(--container-prose);
+      margin-left: auto;
+      margin-right: auto;
+    }
+    /* Riêng ảnh thì cho rộng hết cột (căn giữa) */
+    .prose-blog > :where(figure):not(:where([class~="not-prose"] *)) {
+      max-width: 100%;
+    }
+    /*
+      Code block: giữ đúng bề rộng cột chữ và căn giữa như văn xuôi,
+      để không bị lệch trái so với đoạn text xung quanh.
+    */
+    .prose-blog > :where(pre):not(:where([class~="not-prose"] *)) {
+      max-width: var(--container-prose);
+      margin-left: auto;
+      margin-right: auto;
+    }
+    /*
+      Bảng: giãn full bề rộng cột chữ và căn giữa như văn xuôi (không lệch trái).
+      Giữ display:table để cột hành xử đúng chuẩn bảng; width:100% để không co
+      theo nội dung. max-width khớp cột chữ cho thẳng hàng với các đoạn text.
+    */
+    .prose-blog > :where(table):not(:where([class~="not-prose"] *)) {
+      display: table;
+      width: 100%;
+      max-width: var(--container-prose);
+      margin-left: auto;
+      margin-right: auto;
+    }
+  }
+}
+
+/* Shiki: đổi màu code block theo dark mode */
+.dark .astro-code,
+.dark .astro-code span {
+  color: var(--shiki-dark) !important;
+  background-color: var(--shiki-dark-bg) !important;
+  font-style: var(--shiki-dark-font-style) !important;
+  font-weight: var(--shiki-dark-font-weight) !important;
+  text-decoration: var(--shiki-dark-text-decoration) !important;
+}
+
+/*
+  Motion — giữ tối giản, chỉ animate transform/opacity, honor reduced-motion.
+  Curve/duration lấy từ token ở trên (triết lý animation của Emil Kowalski).
+*/
+
+/*
+  1) Post grid entrance: các card "rise + fade" khi trang load lần đầu, có stagger nhẹ.
+     Dùng @starting-style nên chỉ chạy lúc mount, KHÔNG chạy lại khi search filter
+     toggle .hidden (tránh animation đánh nhau với người đang gõ tìm).
+     Chỉ áp cho item trong grid trang chủ (đánh dấu bằng .post-enter).
+*/
+@media (prefers-reduced-motion: no-preference) {
+  .post-enter {
+    opacity: 1;
+    transform: translateY(0);
+    transition:
+      opacity 300ms var(--ease-out),
+      transform 300ms var(--ease-out);
+  }
+
+  @starting-style {
+    .post-enter {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+  }
+
+  /* Stagger: mỗi card vào trễ hơn card trước một nhịp ngắn (decorative). */
+  .post-enter:nth-child(2) { transition-delay: 50ms; }
+  .post-enter:nth-child(3) { transition-delay: 100ms; }
+  .post-enter:nth-child(4) { transition-delay: 150ms; }
+  .post-enter:nth-child(5) { transition-delay: 200ms; }
+  .post-enter:nth-child(6) { transition-delay: 250ms; }
+}
+
+/*
+  2) Accordion <details> trong bài viết: mở/đóng mượt thay vì snap.
+     Dùng CSS thuần (interpolate-size + ::details-content) — không cần JS.
+     Trình duyệt chưa hỗ trợ sẽ tự fallback về hành vi snap mặc định (vẫn dùng được).
+     Purpose: state indication. Duration ngắn vì animate height tốn layout mỗi frame.
+*/
+@media (prefers-reduced-motion: no-preference) {
+  @supports (interpolate-size: allow-keywords) {
+    html {
+      interpolate-size: allow-keywords;
+    }
+
+    .prose-blog :where(details):not(:where([class~="not-prose"] *)) {
+      &::details-content {
+        overflow: hidden;
+        height: 0;
+        opacity: 0;
+        transition:
+          height 220ms var(--ease-out),
+          opacity 220ms var(--ease-out),
+          content-visibility 220ms allow-discrete;
+      }
+
+      &[open]::details-content {
+        height: auto;
+        opacity: 1;
+      }
+    }
+  }
+}

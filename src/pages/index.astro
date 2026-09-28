@@ -1,0 +1,108 @@
+---
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import Header from "@/components/Header.astro";
+import Footer from "@/components/Footer.astro";
+import PostCard from "@/components/PostCard.astro";
+import { getFeaturedAndRest } from "@/utils/posts";
+import { SITE } from "@/consts";
+
+const { lead, featuredRest, rest } = await getFeaturedAndRest();
+---
+
+<BaseLayout>
+  <Header />
+
+  <main class="mx-auto max-w-5xl px-4 sm:px-6">
+    <!-- Hero: căn giữa -->
+    <section class="flex flex-col items-center py-16 text-center sm:py-24">
+      <p class="font-mono text-sm font-medium uppercase tracking-[0.2em] text-[var(--color-accent)]">
+        Xin chào, mình là Toan Nguyen 
+      </p>
+      <h1 class="mt-4 font-display text-4xl font-bold leading-tight text-[var(--color-fg)] sm:text-6xl">
+        <span class="mt-1 block whitespace-nowrap text-[var(--color-accent)]">
+          Build&nbsp;-&nbsp;Break&nbsp;-&nbsp;Troubleshoot
+        </span>
+      </h1>
+      <p class="mt-6 max-w-2xl text-lg leading-relaxed text-[var(--color-muted)]">
+        {SITE.description}
+      </p>
+    </section>
+
+    <!-- Featured -->
+    {
+      lead && (
+        <section class="mb-16">
+          <h2 class="mb-6 font-mono text-xs font-semibold uppercase tracking-widest text-[var(--color-muted)]">
+            Bài nổi bật
+          </h2>
+          <PostCard post={lead} featured />
+          {featuredRest.length > 0 && (
+            <div class="mt-10 grid gap-x-6 gap-y-10 sm:grid-cols-2">
+              {featuredRest.map((post) => (
+                <div class="post-enter">
+                  <PostCard post={post} />
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      )
+    }
+
+    <!-- Danh sách + tìm kiếm -->
+    <section class="pb-8">
+      <div class="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <h2 class="font-display text-2xl font-bold text-[var(--color-fg)]">Bài viết</h2>
+        <div class="relative sm:w-72">
+          <svg class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--color-muted)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" />
+          </svg>
+          <input
+            id="post-search"
+            type="search"
+            placeholder="Tìm theo tiêu đề, mô tả, chủ đề..."
+            aria-label="Tìm bài viết"
+            class="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] py-2 pl-9 pr-3 text-sm text-[var(--color-fg)] placeholder:text-[var(--color-muted)] focus:border-[var(--color-accent)] focus:outline-none"
+          />
+        </div>
+      </div>
+
+      <div id="post-grid" class="grid gap-x-6 gap-y-10 sm:grid-cols-2">
+        {
+          rest.map((post) => (
+            <div
+              class="post-enter"
+              data-post-card
+              data-search={`${post.data.title} ${post.data.excerpt} ${post.data.category} ${post.data.tags.join(" ")}`.toLowerCase()}
+            >
+              <PostCard post={post} />
+            </div>
+          ))
+        }
+      </div>
+
+      <p id="no-results" class="hidden py-12 text-center text-[var(--color-muted)]">
+        Không tìm thấy bài viết phù hợp.
+      </p>
+    </section>
+  </main>
+
+  <Footer />
+
+  <script>
+    const input = document.getElementById("post-search") as HTMLInputElement | null;
+    const cards = document.querySelectorAll<HTMLElement>("[data-post-card]");
+    const noResults = document.getElementById("no-results");
+
+    input?.addEventListener("input", () => {
+      const q = input.value.trim().toLowerCase();
+      let visible = 0;
+      cards.forEach((card) => {
+        const match = !q || (card.dataset.search ?? "").includes(q);
+        card.classList.toggle("hidden", !match);
+        if (match) visible++;
+      });
+      noResults?.classList.toggle("hidden", visible !== 0);
+    });
+  </script>
+</BaseLayout>

@@ -1,0 +1,53 @@
+<svg width="1200" height="630" viewBox="0 0 1200 630" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#12161d"/>
+      <stop offset="1" stop-color="#0b0e13"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="80%" cy="28%" r="46%">
+      <stop offset="0" stop-color="#3b82f6" stop-opacity="0.24"/>
+      <stop offset="1" stop-color="#3b82f6" stop-opacity="0"/>
+    </radialGradient>
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M40 0H0V40" fill="none" stroke="#ffffff" stroke-opacity="0.04"/>
+    </pattern>
+    <g id="k8s">
+      <path d="m -6.8492015,4.2724668 a 1.1191255,1.1099671 0 0 0 -0.4288818,0.1085303 l -5.8524037,2.7963394 a 1.1191255,1.1099671 0 0 0 -0.605524,0.7529759 l -1.443828,6.2812846 a 1.1191255,1.1099671 0 0 0 0.151943,0.851028 1.1191255,1.1099671 0 0 0 0.06362,0.08832 l 4.0508,5.036555 a 1.1191255,1.1099671 0 0 0 0.874979,0.417654 l 6.4961011,-0.0015 a 1.1191255,1.1099671 0 0 0 0.8749788,-0.416906 L 1.3818872,15.149453 A 1.1191255,1.1099671 0 0 0 1.5981986,14.210104 L 0.15212657,7.9288154 A 1.1191255,1.1099671 0 0 0 -0.45339794,7.1758396 L -6.3065496,4.3809971 A 1.1191255,1.1099671 0 0 0 -6.8492015,4.2724668 Z" style="fill:#326ce5"/>
+      <path style="fill:#ffffff;fill-rule:evenodd" d="M 6.2617914,7.036086 9.8826317,5.986087 13.503462,7.036086 9.8826317,8.086087 Z"/>
+      <path style="fill:#ffffff;fill-rule:evenodd" d="m 6.2617914,7.43817 0,3.852778 3.3736103,1.868749 0.0167,-4.713193 z"/>
+      <path style="fill:#ffffff;fill-rule:evenodd" d="m 13.503462,7.43817 0,3.852778 -3.37361,1.868749 -0.0167,-4.713193 z"/>
+    </g>
+  </defs>
+
+  <rect width="1200" height="630" fill="url(#bg)"/>
+  <rect width="1200" height="630" fill="url(#grid)"/>
+  <rect width="1200" height="630" fill="url(#glow)"/>
+
+  <!-- Icon K8s lớn mờ nền phải -->
+  <g transform="translate(880,150) scale(26)" opacity="0.09">
+    <use href="#k8s"/>
+  </g>
+
+  <rect x="64" y="120" width="48" height="4" rx="2" fill="#3b82f6"/>
+  <text x="64" y="166" font-family="'JetBrains Mono',monospace" font-size="20" letter-spacing="3" fill="#3b82f6">KUBERNETES</text>
+
+  <text font-family="'Lexend','Inter',sans-serif" font-size="50" font-weight="700" fill="#ffffff">
+    <tspan x="64" y="252">Xây dựng Kiro CLI Agent</tspan>
+    <tspan x="64" y="314" font-size="42">cho Amazon EKS</tspan>
+  </text>
+
+  <g transform="translate(64,420)">
+    <rect width="215" height="34" rx="17" fill="#3b82f6" fill-opacity="0.15"/>
+    <text x="16" y="23" font-family="'JetBrains Mono',monospace" font-size="15" fill="#3b82f6">kiro-cli · mcp · eks</text>
+  </g>
+
+  <text x="64" y="566" font-family="'JetBrains Mono',monospace" font-size="18" fill="#8b93a1">Toan Nguyen<tspan fill="#3b82f6">.</tspan>devops</text>
+
+  <!-- Huy hiệu K8s nhỏ góc phải trên -->
+  <g transform="translate(1040,56)">
+    <rect width="96" height="96" rx="20" fill="#ffffff" fill-opacity="0.06" stroke="#3b82f6" stroke-opacity="0.4"/>
+    <g transform="translate(48,48) scale(3.4)">
+      <use href="#k8s"/>
+    </g>
+  </g>
+</svg>
