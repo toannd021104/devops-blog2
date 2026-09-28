@@ -1,6 +1,7 @@
 import rss from "@astrojs/rss";
 import { getCollection } from "astro:content";
 import { SITE } from "@/consts";
+import { withBase } from "@/utils/url";
 
 export async function GET(context) {
   const posts = await getCollection("posts", ({ data }) => !data.draft);
@@ -17,7 +18,7 @@ export async function GET(context) {
       description: post.data.excerpt,
       pubDate: post.data.pubDate,
       categories: [post.data.category, ...post.data.tags],
-      link: `/posts/${post.id}/`,
+      link: withBase(`/posts/${post.id}/`),
     })),
   });
 }

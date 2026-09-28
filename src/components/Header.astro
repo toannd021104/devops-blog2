@@ -1,10 +1,13 @@
 ---
 import { SITE, NAV } from "@/consts";
+import { withBase } from "@/utils/url";
 import ThemeToggle from "./ThemeToggle.astro";
 
 const path = Astro.url.pathname;
-const isActive = (href: string) =>
-  href === "/" ? path === "/" : path.startsWith(href);
+const isActive = (href: string) => {
+  const target = withBase(href);
+  return href === "/" ? path === target : path.startsWith(target);
+};
 ---
 
 <header
@@ -12,7 +15,7 @@ const isActive = (href: string) =>
 >
   <div class="mx-auto flex h-16 max-w-5xl items-center justify-between px-4 sm:px-6">
     <a
-      href="/"
+      href={withBase("/")}
       class="font-display text-lg font-bold tracking-tight text-[var(--color-fg)]"
     >
       Toan Nguyen<span class="text-[var(--color-accent)]">.</span>devops
@@ -22,7 +25,7 @@ const isActive = (href: string) =>
       {
         NAV.map((item) => (
           <a
-            href={item.href}
+            href={withBase(item.href)}
             aria-current={isActive(item.href) ? "page" : undefined}
             class:list={[
               "rounded-lg px-3 py-1.5 text-sm font-medium transition-colors",

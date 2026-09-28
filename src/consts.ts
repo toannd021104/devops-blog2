@@ -5,8 +5,8 @@ export const SITE = {
     "Blog kỹ thuật về DevOps, Cloud, Security và AI - hands-on labs, kiến trúc hệ thống và ghi chú thực chiến.",
   author: "Toan Nguyen",
   lang: "vi",
-  // Cập nhật khi deploy thật (khớp astro.config.mjs -> site)
-  url: "https://devops-blog2.example.com",
+  // Khớp astro.config.mjs -> site (GitHub Pages project site)
+  url: "https://toannd021104.github.io/devops-blog2",
   socials: {
     github: "https://github.com/toannd021104",
     linkedin: "https://www.linkedin.com/in/toanndcloud/",

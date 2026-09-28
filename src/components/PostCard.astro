@@ -2,6 +2,7 @@
 import { Image } from "astro:assets";
 import type { Post } from "@/utils/posts";
 import { formatDate } from "@/utils/posts";
+import { withBase } from "@/utils/url";
 
 interface Props {
   post: Post;
@@ -11,7 +12,7 @@ interface Props {
 
 const { post, featured = false } = Astro.props;
 const { data } = post;
-const href = `/posts/${post.id}/`;
+const href = withBase(`/posts/${post.id}/`);
 ---
 
 <article

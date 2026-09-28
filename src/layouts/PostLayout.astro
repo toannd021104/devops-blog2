@@ -9,6 +9,7 @@ import ProblemCard from "@/components/ProblemCard.astro";
 import TakeawaysCard from "@/components/TakeawaysCard.astro";
 import type { Post } from "@/utils/posts";
 import { formatDate } from "@/utils/posts";
+import { withBase } from "@/utils/url";
 
 interface Props {
   post: Post;
@@ -46,7 +47,7 @@ const { data } = post;
       <!-- Cột giữa: toàn bộ nội dung bài -->
       <div class="w-full min-w-0 lg:col-start-2">
         <a
-          href="/"
+          href={withBase("/")}
           class="mx-auto mb-8 flex max-w-[var(--container-prose)] items-center gap-2 text-sm font-medium text-[var(--color-muted)] transition-colors hover:text-[var(--color-accent)]"
         >
           <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
@@ -101,7 +102,7 @@ const { data } = post;
             <div class="mx-auto mt-10 flex max-w-[var(--container-prose)] flex-wrap gap-2 border-t border-[var(--color-border)] pt-6">
               {data.tags.map((tag) => (
                 <a
-                  href={`/tags/${tag}/`}
+                  href={withBase(`/tags/${tag}/`)}
                   class="rounded-full border border-[var(--color-border)] px-3 py-1 text-sm text-[var(--color-muted)] transition-colors hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
                 >
                   #{tag}

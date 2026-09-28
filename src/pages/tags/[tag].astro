@@ -4,6 +4,7 @@ import Header from "@/components/Header.astro";
 import Footer from "@/components/Footer.astro";
 import PostCard from "@/components/PostCard.astro";
 import { getPublishedPosts } from "@/utils/posts";
+import { withBase } from "@/utils/url";
 
 export async function getStaticPaths() {
   const posts = await getPublishedPosts();
@@ -21,7 +22,7 @@ const { tag, posts } = Astro.props;
   <Header />
   <main class="mx-auto max-w-5xl px-4 py-16 sm:px-6">
     <a
-      href="/tags"
+      href={withBase("/tags")}
       class="mb-6 inline-flex items-center gap-2 text-sm font-medium text-[var(--color-muted)] transition-colors hover:text-[var(--color-accent)]"
     >
       ← Tất cả chủ đề

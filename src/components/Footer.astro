@@ -1,5 +1,6 @@
 ---
 import { SITE } from "@/consts";
+import { withBase } from "@/utils/url";
 const year = new Date().getFullYear();
 ---
 
@@ -24,7 +25,7 @@ const year = new Date().getFullYear();
         rel="noopener noreferrer"
         class="transition-colors hover:text-[var(--color-accent)]">linkedin</a
       >
-      <a href="/rss.xml" class="transition-colors hover:text-[var(--color-accent)]">rss</a>
+      <a href={withBase("/rss.xml")} class="transition-colors hover:text-[var(--color-accent)]">rss</a>
     </div>
   </div>
 </footer>

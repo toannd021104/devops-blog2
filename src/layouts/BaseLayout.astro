@@ -1,5 +1,6 @@
 ---
 import { SITE } from "@/consts";
+import { withBase } from "@/utils/url";
 import "@/styles/global.css";
 
 interface Props {
@@ -32,7 +33,7 @@ const ogImage = image
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <link rel="icon" type="image/png" href="/favicon.png" />
+    <link rel="icon" type="image/png" href={withBase("/favicon.png")} />
     <meta name="generator" content={Astro.generator} />
 
     <title>{pageTitle}</title>
@@ -67,7 +68,7 @@ const ogImage = image
       rel="alternate"
       type="application/rss+xml"
       title={SITE.title}
-      href={new URL("/rss.xml", Astro.site ?? SITE.url).href}
+      href={new URL(withBase("/rss.xml"), Astro.site ?? SITE.url).href}
     />
 
     <!-- Fonts: Inter + Lexend + JetBrains Mono qua Google Fonts (preconnect để nhanh) -->
