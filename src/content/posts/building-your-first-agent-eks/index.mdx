@@ -1,0 +1,182 @@
+---
+title: "Building your first agent on Amazon EKS"
+excerpt: "Dựng một customer service agent trên Amazon EKS từ con số không: bắt đầu bằng Strands agent loop gọi model qua AI Gateway, dời tool ra MCP server, rồi soi mọi thứ bằng trace trong Langfuse."
+category: "Kubernetes"
+date: "Sep 24, 2026"
+pubDate: 2026-09-24
+readTime: "14 min read"
+cover: "./cover.svg"
+coverAlt: "Ảnh bìa: Building your first agent on Amazon EKS"
+tags: ["kubernetes", "eks", "ai", "aws", "bedrock", "mcp", "strands", "langfuse"]
+featured: false
+problem: "Viết một agent chạy trên máy local thì nhanh, nhưng đưa nó thành dịch vụ thật trên Kubernetes lại kéo theo ba câu hỏi: agent loop nên trông thế nào và model credential giữ ở đâu, tool nên sống ở đâu, và khi agent trả lời chậm thì nhìn vào đâu? Bài này xây một customer service agent trên Amazon EKS và bồi thêm đúng một khả năng sau mỗi bước: agent loop, tool qua MCP, và observability bằng trace."
+takeaways:
+  - "Bốn khái niệm Strands (Agent, Model, Tools, System prompt) đủ để dựng một agent loop hoàn chỉnh, mọi cấu hình đến từ environment."
+  - "Đưa tool ra sau MCP + agentgateway biến tool thành dịch vụ mạng độc lập và tạo một control point cho mọi tool call."
+  - "Observability bằng OpenTelemetry + Langfuse cho một trace duy nhất trải khắp agent, tool và gateway nhờ header traceparent."
+  - "Agent không bao giờ giữ credential Bedrock: AI Gateway sở hữu AWS identity và dịch request sang Converse API."
+---
+
+import { Image } from "astro:assets";
+import img18 from "./image-18.png";
+import img28 from "./image-28.png";
+import img33 from "./image-33.png";
+import img34 from "./image-34.png";
+import img21 from "./image-21.png";
+import img25 from "./image-25.png";
+import img26 from "./image-26.png";
+
+> Đây là nửa đầu loạt bài mình ghi lại khi làm workshop **Building Agents on Amazon EKS**. Mình xây một customer service agent cho AnyCompany Shop và bồi thêm một khả năng sau mỗi phần. Bài này đi ba bước đầu — dựng agent, đưa tool ra MCP, quan sát bằng trace. Phần bảo mật (Cognito, gateway, sandbox) nằm ở bài sau, *Securing your agent on EKS*.
+
+## Bài toán
+
+Một agent chạy trên máy local chỉ cần vài chục dòng Python. Nhưng khi đưa nó thành dịch vụ thật trên Kubernetes, ba câu hỏi hiện ra: agent loop nên trông thế nào và model credential giữ ở đâu; tool nên nằm trong process agent hay tách ra; và khi câu trả lời chậm hay sai, nhìn vào đâu để biết.
+
+Thay vì trả lời cả ba cùng lúc, mình xây dần — mỗi bước là một khả năng chồng lên bước trước.
+
+| Phần | Khả năng | Agent hưởng lợi gì |
+| --- | --- | --- |
+| 1. First agent | Core loop | Nhận query, suy luận, gọi tool, trả lời |
+| 2. Tools với MCP | Tool trên mạng | Dời tool ra MCP server, khám phá lúc runtime |
+| 3. Observability | Trace | Nhìn xuyên mọi LLM call và tool call trong Langfuse |
+
+---
+
+## Phần 1 — Building your first agent
+
+> Deploy agent đầu tiên cho AnyCompany Shop bằng **Strands Agents SDK**, gọi model tới Amazon Bedrock qua Envoy AI Gateway.
+
+### Kiến trúc
+
+<Image src={img18} alt="First agent flow: query từ Chainlit UI tới Strands Agent, OpenAI wire format tới Envoy AI Gateway, Converse API với SigV4 Pod Identity tới Bedrock, và tool lookup_order đọc DynamoDB" />
+
+Agent chỉ là một vòng lặp: nhận câu hỏi, hỏi model, nếu model bảo "gọi tool" thì gọi, đưa kết quả lại cho model, rồi trả lời khách. Điểm quan trọng ngay từ đầu: agent không gọi Bedrock trực tiếp và không giữ credential Bedrock. Nó gửi request chat-completions bình thường tới gateway, gateway sở hữu AWS identity (SigV4 qua EKS Pod Identity) rồi dịch sang Converse API của Bedrock. Đổi model (Nova sang Claude) chỉ là đổi một dòng `MODEL_ID`.
+
+### Strands SDK và code
+
+Strands là một Python SDK mã nguồn mở để xây agent; LLM quyết định gọi tool nào và theo thứ tự nào. Bốn khái niệm gánh cả SDK: **Agent** (vòng lặp), **Model** (endpoint nói chat-completions, ở đây là AI Gateway), **Tools** (hàm `@tool`), **System prompt** (định hình hành vi).
+
+Mọi giá trị đọc từ environment theo nguyên tắc 12-factor, nên cùng một image chạy ở đâu cũng được:
+
+```python
+model = OpenAIModel(
+    client_args={
+        "base_url": os.environ["MODEL_BASE_URL"],   # trỏ tới Envoy AI Gateway
+        "api_key": os.environ.get("MODEL_API_KEY", "not-needed"),  # gateway tự xác thực
+    },
+    model_id=os.environ.get("MODEL_ID", "nova-lite"),  # alias, gateway rewrite sang id Bedrock
+    params={"max_tokens": 1024, "temperature": 0.3},
+)
+```
+
+### Deploy & chat
+
+`k8s.yaml` là một Deployment + ClusterIP Service (port 8080). Hai chi tiết wiring quan trọng: `serviceAccountName: agent` cấp quyền DynamoDB qua Pod Identity (cho `lookup_order`), và `envFrom: agent-config` đưa `MODEL_BASE_URL`/`MODEL_ID`/`ORDERS_TABLE` vào container.
+
+```bash
+cd ~/environment/modules/200-strands-agents/customer-agent
+envsubst < k8s.yaml | kubectl apply -f -
+kubectl rollout status deployment/customer-agent --timeout=120s
+```
+
+Mở URL từ banner, đăng nhập vai Support Associate, rồi thử ba câu — test đường thành công (đơn có thật), đơn ở status đặc biệt, và lỗi (đơn không tồn tại):
+
+```text
+Hi, my order ORD-1001 still hasn't arrived. Can you help?
+Status of the mechanical keyboard from Order ORD-1005?
+Can you check on order ORD-99999?
+```
+
+**Kết phần 1:** một Strands agent loop xử lý hội thoại, model call qua AI Gateway, và tool `lookup_order` đọc DynamoDB qua Pod Identity.
+
+---
+
+## Phần 2 — Agent tools với MCP
+
+> Đến giờ tool sống bên trong process agent. Phần này mình dời tool ra một MCP server độc lập mà agent khám phá lúc runtime, định tuyến qua **agentgateway**.
+
+### MCP và agentgateway
+
+**Model Context Protocol** là chuẩn mở để expose tool cho agent qua mạng: MCP server publish một tập tool, client (Strands agent) kết nối, gọi `list_tools` để khám phá, rồi gọi theo tên. Agent không import code tool — nó học tool lúc runtime. Tool từ "hàm trong người agent" trở thành "dịch vụ chạy riêng trên mạng".
+
+Lợi ích: tool **decoupled** (sửa một chỗ), **discoverable** (thêm là agent nhặt được), **shareable** (nhiều agent dùng chung), và tạo **một control point** — mọi call đi qua agentgateway, một MCP gateway nói được giao thức nên thấy từng `tools/list` và `tools/call`. Đó là thứ làm per-tool authorization khả thi (nhân vật chính ở bài *Securing*).
+
+### Kiến trúc
+
+<Image src={img28} alt="MCP lab flow: agent forward Cognito Bearer token qua MCP qua agentgateway tới MCP server mà order tools đọc DynamoDB, trong khi local search_products query Milvus và LLM call chảy qua Envoy AI Gateway tới Bedrock" />
+
+MCP server giữ quyền DynamoDB mà order tool cần — tool đã dời, đường dữ liệu của nó thì không. Vì mỗi user có token riêng, agent không thể dùng chung toàn cục: mỗi phiên chat tạo một agent mang token của chính user đó, forward trên mỗi MCP call.
+
+Một hệ quả đẹp: agent giờ chạy dưới ServiceAccount `customer-agent` **không có Pod Identity**, nên pod agent không giữ quyền AWS nào — quyền DynamoDB dời sang MCP server cùng với tool. Đây là **least privilege đi theo code**.
+
+### Deploy & chat
+
+```bash
+# MCP server
+cd ~/environment/modules/500-agent-tools-mcp/mcp-server
+envsubst < k8s.yaml | kubectl apply -f - && kubectl rollout status deployment/mcp-server --timeout=120s
+# Agent (bản MCP)
+cd ../customer-agent
+envsubst < k8s.yaml | kubectl apply -f - && kubectl rollout status deployment/customer-agent --timeout=120s
+# Seed Milvus cho tool local search_products (RAG vector search)
+kubectl exec -i deploy/customer-agent -- python - < seed_products.py
+```
+
+```text
+Where is my order ORD-1001?
+Do you have the Mechanical Keyboard in stock?
+What do you have for cutting down background noise on calls?
+```
+
+<Image src={img33} alt="Kết quả query lookup_order qua MCP server" />
+
+Ba câu đầu hit `lookup_order`, `check_inventory`, `initiate_return` qua MCP server; câu cuối hit local `search_products` — vector search trả về noise cancelling headphones dù không trùng chữ. Kiểm tra agent khám phá được tool:
+
+```bash
+kubectl logs deploy/customer-agent | grep "Discovered"
+# Discovered 3 MCP tools ...: ['lookup_order', 'check_inventory', 'initiate_return']
+```
+
+<Image src={img34} alt="Log discovery các MCP tool" />
+
+**Kết phần 2:** tool dời ra MCP server độc lập, route qua agentgateway (network control point), agent per-session forward Cognito token trên mỗi call.
+
+---
+
+## Phần 3 — Observability với Langfuse
+
+> Agent hiện là hộp đen: trả lời chậm hay sai, bạn không thấy model call hay tool nào gây ra. Phần này mình instrument agent bằng OpenTelemetry và đọc trace trong Langfuse.
+
+Trace là bản ghi một request đi qua những đâu và mất bao lâu mỗi chặng. Với agent AI, nó cho thấy model gọi tool nào, tốn bao nhiêu token, chặng nào chậm. Langfuse và một OpenTelemetry Collector chung đã chạy sẵn trong cluster.
+
+Điểm hay: gần như **không viết thêm code**. Image chạy app bằng `opentelemetry-instrument` (auto-instrumentation patch `httpx`/FastAPI lúc runtime), một Langfuse client flush span sau mỗi request, và `OTEL_EXPORTER_OTLP_ENDPOINT` trỏ tới collector. Header `traceparent` là mấu chốt: Envoy AI Gateway đọc nó nên span của gateway lồng dưới trace của agent thay vì tạo trace riêng.
+
+### Kiến trúc
+
+<Image src={img21} alt="Observability flow: FastAPI span root trace ở agent, LLM call mang traceparent tới Envoy AI Gateway mà span ChatCompletion lồng dưới nó, cả hai export tới OTel Collector rồi tới Langfuse" />
+
+### Deploy & đọc trace
+
+```bash
+cd ~/environment/modules/300-observability-langfuse/customer-agent
+envsubst < k8s.yaml | kubectl apply -f - && kubectl rollout status deployment/customer-agent --timeout=120s
+kubectl logs deploy/customer-agent | grep Langfuse   # -> Langfuse connected successfully
+```
+
+Gửi một query có tool call, mở **Tracing > Traces** trong Langfuse, chuyển view **Timeline**. Một trace gồm bốn thứ: `POST /chat` (root FastAPI), chat generation của agent (model, token, latency), tool call `lookup_order` (input + kết quả DynamoDB), và span `ChatCompletion` (gateway report cùng model call).
+
+<Image src={img25} alt="Trace của Langfuse dưới chế độ timeline" />
+
+Gửi query "đơn không tồn tại": tool span hiện not-found, model chọn xin lỗi thay vì bịa đơn. Nói ngắn: **trace** trả lời "vì sao câu này chậm", **dashboard** trả lời "chậm vậy có bình thường không".
+
+<Image src={img26} alt="So sánh trace của query đơn không tồn tại" />
+
+**Kết phần 3:** cùng agent, giờ phát OpenTelemetry trace tới Langfuse; một trace duy nhất mỗi request trải khắp agent, tool call và AI Gateway nhờ `traceparent`.
+
+---
+
+## Kết bài
+
+Qua ba phần, một customer service agent đã đi từ con số không tới một dịch vụ chạy trên EKS: một Strands agent loop gọi model qua AI Gateway (không cầm credential Bedrock), tool tách ra MCP server và route qua agentgateway, và mọi request để lại một trace đọc được trong Langfuse.
+
+Phần còn lại — chỉ đúng người gọi đúng tool, model endpoint được quản ra sao, và chạy code do LLM sinh ra sao cho an toàn — là nội dung bài tiếp theo: *Securing your agent on EKS*.

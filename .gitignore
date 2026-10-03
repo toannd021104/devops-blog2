@@ -25,3 +25,6 @@ pnpm-debug.log*
 
 # stray screenshot in project root
 6df722b4-35ad-49d8-8238-6be69a81580b.png
+
+# learn-mode local notes (nội bộ, không commit)
+.vibe-wise/

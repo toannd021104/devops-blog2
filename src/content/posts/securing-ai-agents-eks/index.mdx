@@ -1,0 +1,159 @@
+---
+title: "Securing AI Agents on Amazon EKS"
+excerpt: "A customer messages a support agent, and three security questions follow: who is this user, what are they allowed to do, and what if the agent has to run code? We answer each with one layer: identity (Cognito), authorization (agentgateway), and isolation (a Firecracker sandbox), without ever touching the agent's code."
+category: "Kubernetes"
+date: "Oct 3, 2026"
+pubDate: 2026-10-03
+readTime: "6 min read"
+cover: "./cover.svg"
+coverAlt: "Cover: Securing AI Agents on Amazon EKS"
+tags: ["kubernetes", "eks", "ai", "security", "cognito", "jwt", "mcp", "agentgateway", "sandbox", "firecracker"]
+featured: false
+problem: "The moment an AI agent can touch real customer data, one question becomes three: who is the user, what are they allowed to do, and how do you run code the model wrote without trusting it? Each is a different kind of security. This post follows one real request and answers all three in order (identity, authorization, isolation), each enforced outside the agent so the agent itself never changes."
+takeaways:
+  - "One question becomes three: identity (who), authorization (what), isolation (untrusted code). Each is a separate layer, each sits outside the agent."
+  - "Identity is a Cognito group baked into a signed JWT; the agent just carries the token, it never decides who you are."
+  - "Authorization is a deny-by-default rule at agentgateway that reads the group claim, so Sarah and David literally see different tools."
+  - "Isolation runs model-written code in an air-gapped, single-use Firecracker microVM: no network, no credentials, destroyed after one run."
+---
+
+import { Image } from "astro:assets";
+import img56 from "./image-56.png";
+import img35 from "./image-35.png";
+import img42 from "./image-42.png";
+import img47 from "./image-47.png";
+import img49 from "./image-49.png";
+import img50 from "./image-50.png";
+import img54 from "./image-54.png";
+import img62 from "./image-62.png";
+
+> From my *Building Agents on Amazon EKS* workshop. We have an AI customer-service agent for an online shop. Its tools (look up an order, process a return, run a query) live behind an **MCP server**, and every tool call passes through a proxy called **agentgateway**. This is the story of making it safe.
+
+## The story: one message, three questions
+
+A customer messages the agent: *"I want to return the wireless mouse from order ORD-1002."*
+
+Simple enough, until you realize the agent is about to touch real orders and real money. Three questions have to be answered *before* it acts, and each is a different kind of security:
+
+1. **Who is actually sending this?** A customer? A support rep? (**Identity**)
+2. **Is this person allowed to process a return?** (**Authorization**)
+3. **And later, if someone asks the agent to crunch numbers and the model writes code to do it, how do we run that code without trusting it?** (**Isolation**)
+
+Meet the two staff members we'll follow:
+
+- **Sarah**, a **Support Associate**, can look up orders *and* process returns.
+- **David**, a **Sales Analyst**, can look up orders, but *not* return them.
+
+Here's the key idea: none of these three answers live inside the agent. The agent just carries a token and calls tools. Everyone's identity, permissions, and the dangerous code all get handled at the *edges* around it. Let's walk the three questions in order.
+
+## Question 1: Who is this? (Identity)
+
+When Sarah logs in, she doesn't tell the agent "I'm Sarah, a support rep." Instead, **Amazon Cognito** (the login system) checks her password and hands her a **signed badge**, a JWT token. Stamped inside that badge is her role: `cognito:groups: ["support-associate"]`.
+
+Think of it like a building pass. Cognito is security at the front desk; it prints the pass and signs it so it can't be forged. From then on, Sarah's badge travels with every request she makes. The agent simply clips it on and forwards it, never reading or deciding anything itself.
+
+```text
+Sarah logs in
+  -> Cognito checks her and issues a signed JWT:
+      { "cognito:groups": ["support-associate"], ... }
+  -> the agent attaches that badge to every tool call:
+      Authorization: Bearer <jwt>
+```
+
+Each role is just a Cognito group with its own login. Here's David's, whose credentials map straight to the `sales-analyst` group:
+
+<Image src={img56} alt="A terminal showing the login handed out for the Sales Analyst role: a username and password mapped to the sales-analyst group, plus the chat UI URL" />
+
+> **💡 Why this matters:** the agent never decides who you are. If you hire a new support rep, you add them to the `support-associate` group in Cognito. No code change, no redeploy. Identity is *data on a badge*, not logic in the app.
+
+## Question 2: Are you allowed? (Authorization)
+
+Sarah's badge says she's a Support Associate. But who checks the badge, and who decides what that role can do? Not the agent, but a **gatekeeper** sitting in front of every tool call: **agentgateway**.
+
+<Image src={img35} alt="Flow: a user's Cognito badge travels from the UI through the agent to agentgateway, which first verifies the badge is genuine, then checks a per-tool rule against the role on it, before any call reaches the MCP server" />
+
+The gatekeeper does two things, in order:
+
+1. **Verify the badge is real.** It checks Cognito's signature. A missing or forged badge is rejected on the spot (401). This is why Question 1 must come before Question 2: you can't trust the role until you've proven the badge is genuine.
+2. **Check the rule for the tool being called**, e.g. *"only a Support Associate may process a return."*
+
+And the gatekeeper is **deny-by-default**: unless a rule explicitly says *yes*, the answer is *no*. You open doors by adding rules, never by removing locks. The rules read the role straight off the badge:
+
+```yaml
+# "Anyone may look up an order; only a Support Associate may process a return."
+matchExpressions:
+  - 'mcp.tool.name == "lookup_order"'
+  - 'mcp.tool.name == "initiate_return" && "support-associate" in jwt["cognito:groups"]'
+```
+
+So when the return request comes in:
+
+- **Sarah** (Support Associate): the gatekeeper allows `initiate_return`. The return goes through, approved, with a return authorization number:
+
+<Image src={img47} alt="A trace of Sarah's request showing initiate_return succeeding: the return for ORD-1002 is approved with authorization number RET-1002" />
+
+- **David** (Sales Analyst): sends the *exact same message*, but the gatekeeper blocks `initiate_return`. The agent can look up the order for him, yet replies that it doesn't have access to process returns:
+
+<Image src={img42} alt="David's chat: he asks to return the wireless mouse from ORD-1002, and the agent replies that it doesn't have access to process returns" />
+
+The neat part: because the gatekeeper speaks the agent's tool protocol (MCP), it doesn't just block the call, it **hides the tool entirely**. Sarah and David ask the agent what it can do and get *different answers*:
+
+```text
+Sarah  -> tools available: lookup_order, initiate_return
+David  -> tools available: lookup_order
+```
+
+<Image src={img49} alt="Two tool lists: Sarah sees initiate_return, David does not" />
+
+> **💡 Same agent, same code, two realities.** David's agent never even knows a "return" tool exists. The gatekeeper shapes what each role can see, not just what they can do.
+
+## Question 3: What if the agent has to run code? (Isolation)
+
+Now David asks something open-ended: *"Chart last month's sales by region."* There's no fixed tool for that. The model has to **write a little program**, run it over the order data, and show the chart.
+
+Here's the danger: that program was written by an AI. You can't fully trust it. What if it tries to copy customer data somewhere, or poke at other systems?
+
+> **💡 The mental shift:** you don't make AI-written code safe by reviewing it harder. You run it in a room with no doors (no network, no credentials) and you burn the room down after one use.
+
+That room is a **Firecracker microVM**, a tiny, throwaway virtual machine. When David asks for the chart:
+
+<Image src={img50} alt="Flow: David's request passes the gatekeeper (only a Sales Analyst may run code), reaches a broker that fetches a read-only slice of orders and runs the model's code inside a sealed, throwaway microVM" />
+
+1. The gatekeeper confirms David is a Sales Analyst (same deny-by-default rule, only his role may run code).
+2. A **broker** fetches just the slice of orders needed (read-only) and drops it, plus the AI's code, into a fresh microVM as plain files.
+3. The code runs, produces a chart, and the broker grabs the image.
+4. **The microVM is destroyed.**
+
+Two things keep it airtight:
+
+- **No way out.** The microVM has its network cut off completely and carries no credentials, so even malicious code has nothing to steal and nowhere to send it.
+- **Data goes around the model, not through it.** The order rows go in as a file; the chart comes back as a short ID the agent fetches separately. The AI model never sees the raw customer data or the image bytes.
+
+```yaml
+# running code is just another tool: only David's role may call it
+matchExpressions:
+  - 'mcp.tool.name == "run_python" && "sales-analyst" in jwt["cognito:groups"]'
+```
+
+David gets his chart inline in the chat. Sarah, with a different role, doesn't even see the option.
+
+<Image src={img54} alt="The sales-by-region chart appears inline in David's chat" />
+
+And the seal is real: the microVM's network policy lists `Egress` as controlled but defines **no egress rule at all**, so every outbound packet is denied by default. Ask for a chart and you can watch a sandbox VM get claimed, run for a few seconds, then vanish and get replaced by a fresh one.
+
+```bash
+kubectl get networkpolicy kata-fc-python-airgap -n agent-sandbox -o jsonpath='{.spec}'
+# policyTypes: ["Ingress", "Egress"]  (Egress is governed, but no egress rule exists, so all outbound is blocked)
+```
+
+<Image src={img62} alt="The kata-fc-python-airgap network policy: policyTypes includes Egress, but no egress rule is defined, so all outbound traffic is blocked" />
+
+## The whole story, in one breath
+
+One customer message set off three security questions, and each got its own answer *outside* the agent:
+
+1. **Identity** (*Who are you?*): Cognito signs it onto a badge (JWT). Sarah is a Support Associate, David is a Sales Analyst.
+2. **Authorization** (*What can you do?*): the gatekeeper reads the badge and enforces one rule per tool, deny-by-default. Sarah can return an order; David can't, and he can't even see the tool.
+3. **Isolation** (*What about untrusted code?*): it runs in a sealed, single-use Firecracker microVM with no network and no credentials, then gets destroyed.
+
+Through all of it, the agent itself never changed. It just carried a badge and called tools. **Security here is configuration at the edges, not code in the agent.** That's the whole point: you can harden the system without ever reopening the agent.

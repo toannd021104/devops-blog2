@@ -5,6 +5,8 @@ import Footer from "@/components/Footer.astro";
 import PostCard from "@/components/PostCard.astro";
 import { getFeaturedAndRest } from "@/utils/posts";
 import { SITE } from "@/consts";
+import { Image } from "astro:assets";
+import avatar from "@/assets/avatar.jpg";
 
 const { lead, featuredRest, rest } = await getFeaturedAndRest();
 ---
@@ -13,19 +15,42 @@ const { lead, featuredRest, rest } = await getFeaturedAndRest();
   <Header />
 
   <main class="mx-auto max-w-5xl px-4 sm:px-6">
-    <!-- Hero: căn giữa -->
-    <section class="flex flex-col items-center py-16 text-center sm:py-24">
-      <p class="font-mono text-sm font-medium uppercase tracking-[0.2em] text-[var(--color-accent)]">
-        Xin chào, mình là Toan Nguyen 
-      </p>
-      <h1 class="mt-4 font-display text-4xl font-bold leading-tight text-[var(--color-fg)] sm:text-6xl">
-        <span class="mt-1 block whitespace-nowrap text-[var(--color-accent)]">
-          Build&nbsp;-&nbsp;Break&nbsp;-&nbsp;Troubleshoot
-        </span>
-      </h1>
-      <p class="mt-6 max-w-2xl text-lg leading-relaxed text-[var(--color-muted)]">
-        {SITE.description}
-      </p>
+    <!-- Hero: căn giữa, có nền lưới mờ + avatar tròn -->
+    <section class="relative overflow-hidden">
+      <!-- Nền lưới: hai gradient tạo đường kẻ 48px, mask bo tròn cho mờ dần ở rìa (trang trí) -->
+      <div
+        aria-hidden="true"
+        class="pointer-events-none absolute inset-0 -z-10 bg-[linear-gradient(var(--color-border)_1px,transparent_1px),linear-gradient(90deg,var(--color-border)_1px,transparent_1px)] bg-[size:48px_48px] opacity-40 [mask-image:radial-gradient(ellipse_at_center,black_30%,transparent_75%)]"
+      >
+      </div>
+
+      <div class="flex flex-col items-center py-16 text-center sm:py-24">
+        <!-- Avatar tròn: viền accent mờ + glow mềm -->
+        <div
+          class="mb-6 h-20 w-20 overflow-hidden rounded-full border-2 border-[color-mix(in_srgb,var(--color-accent)_40%,transparent)]"
+          style="box-shadow: 0 0 40px -8px color-mix(in srgb, var(--color-accent) 55%, transparent);"
+        >
+          <Image
+            src={avatar}
+            alt={SITE.author}
+            width={160}
+            height={160}
+            class="h-full w-full object-cover"
+          />
+        </div>
+
+        <p class="font-mono text-sm font-medium uppercase tracking-[0.2em] text-[var(--color-accent)]">
+          Xin chào, mình là Toan Nguyen 
+        </p>
+        <h1 class="mt-4 font-display text-4xl font-bold leading-tight text-[var(--color-fg)] sm:text-6xl">
+          <span class="mt-1 block whitespace-nowrap text-[var(--color-accent)]">
+            Build&nbsp;-&nbsp;Break&nbsp;-&nbsp;Troubleshoot
+          </span>
+        </h1>
+        <p class="mt-6 max-w-2xl text-lg leading-relaxed text-[var(--color-muted)]">
+          {SITE.description}
+        </p>
+      </div>
     </section>
 
     <!-- Featured -->

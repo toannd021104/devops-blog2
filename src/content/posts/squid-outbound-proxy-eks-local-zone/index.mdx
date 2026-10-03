@@ -8,7 +8,7 @@ readTime: "8 min read"
 cover: "./cover.svg"
 coverAlt: "Ảnh bìa: Tự làm NAT Gateway trên AWS Local Zone bằng Squid + EIP"
 tags: ["aws", "eks", "networking", "security", "terraform"]
-featured: true
+featured: false
 problem: "AWS Local Zone đưa workload tới gần user để giảm latency, nhưng đánh đổi bằng việc thiếu nhiều dịch vụ của region — đáng chú ý nhất là không có NAT Gateway. Vậy làm sao để app pods trong private subnet vẫn ra được internet bằng một source IP cố định (cho partner whitelist), mà không phơi node ra public và vẫn kiểm soát được domain nào được phép gọi ra?"
 takeaways:
   - "Dùng Squid forward proxy thay cho NAT instance vì cần kiểm soát outbound ở mức domain (ACL), không chỉ NAT thuần — đánh đổi là phải tự vận hành thêm một lớp proxy."

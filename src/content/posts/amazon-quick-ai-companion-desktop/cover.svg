@@ -5,50 +5,43 @@
       <stop offset="1" stop-color="#0b0e13"/>
     </linearGradient>
     <radialGradient id="glow" cx="80%" cy="28%" r="46%">
-      <stop offset="0" stop-color="#14b8a6" stop-opacity="0.24"/>
+      <stop offset="0" stop-color="#14b8a6" stop-opacity="0.22"/>
       <stop offset="1" stop-color="#14b8a6" stop-opacity="0"/>
     </radialGradient>
     <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
       <path d="M40 0H0V40" fill="none" stroke="#ffffff" stroke-opacity="0.04"/>
     </pattern>
-    <!-- Meeting -> tasks: calendar with a check -->
-    <g id="quick" fill="none" stroke="#14b8a6" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-      <rect x="3" y="4.5" width="18" height="16.5" rx="2.5"/>
-      <path d="M3 9h18"/>
-      <path d="M7.5 2.5v4M16.5 2.5v4"/>
-      <path d="M8 14.5l2.6 2.6L16 12"/>
-    </g>
+    <!-- Amazon Q glyph (transparent, no service tile). Source viewBox 80x80, glyph offset (16,12.35) -->
+    <symbol id="amazonq" viewBox="0 0 80 80">
+      <g transform="translate(16 12.35)">
+        <path d="M27 25.767 27 29.532 24 31.032 21 29.532 21 25.767 24 24.26 27 25.767ZM43.968 41.715 25.968 51.889C24.755 52.576 23.245 52.576 22.032 51.889L4.032 41.715C2.778 41.007 2 39.672 2 38.233L2 16.96C2 15.574 2.736 14.265 3.92 13.543L21.921 2.587C22.562 2.197 23.281 2.001 24 2.001 24.719 2.001 25.438 2.197 26.08 2.587L44.08 13.543C45.264 14.265 46 15.574 46 16.96L46 38.233C46 38.481 45.969 38.725 45.924 38.964L29 29.562 29 25.15C29 24.772 28.787 24.427 28.449 24.257L24.449 22.247C24.166 22.106 23.834 22.106 23.551 22.247L19.551 24.257C19.213 24.427 19 24.772 19 25.15L19 30.15C19 30.529 19.214 30.875 19.553 31.045L23.553 33.045C23.693 33.115 23.847 33.15 24 33.15 24.153 33.15 24.307 33.115 24.447 33.045L27.976 31.281 45.075 40.78C44.769 41.15 44.399 41.472 43.968 41.715L43.968 41.715ZM45.119 11.835 27.12 0.879C25.194-0.293 22.805-0.293 20.881 0.879L2.881 11.835C1.104 12.917 0 14.881 0 16.96L0 38.233C0 40.392 1.168 42.393 3.048 43.456L21.048 53.63C21.959 54.145 22.979 54.402 24 54.402 25.021 54.402 26.042 54.145 26.952 53.63L44.952 43.456C46.832 42.393 48 40.392 48 38.233L48 16.96C48 14.881 46.896 12.917 45.119 11.835L45.119 11.835Z"/>
+      </g>
+    </symbol>
   </defs>
 
   <rect width="1200" height="630" fill="url(#bg)"/>
   <rect width="1200" height="630" fill="url(#grid)"/>
   <rect width="1200" height="630" fill="url(#glow)"/>
 
-  <!-- Icon lớn mờ nền phải -->
-  <g transform="translate(840,180) scale(20)" opacity="0.09">
-    <use href="#quick"/>
-  </g>
+  <!-- Icon lớn mờ nền phải, trong suốt, tô accent -->
+  <use href="#amazonq" x="820" y="150" width="300" height="300" fill="#14b8a6" opacity="0.08"/>
 
-  <rect x="64" y="120" width="48" height="4" rx="2" fill="#14b8a6"/>
-  <text x="64" y="166" font-family="'JetBrains Mono',monospace" font-size="20" letter-spacing="3" fill="#14b8a6">DEVOPS</text>
+  <!-- Nhãn category: không thanh accent, to + cao -->
+  <text x="64" y="150" font-family="'JetBrains Mono',monospace" font-size="30" letter-spacing="4" fill="#14b8a6">DEVOPS</text>
 
-  <text font-family="'Lexend','Inter',sans-serif" font-size="50" font-weight="700" fill="#ffffff">
-    <tspan x="64" y="252">Amazon Quick: trợ lý meeting</tspan>
-    <tspan x="64" y="314" font-size="38">biến cuộc họp thành task</tspan>
+  <text font-family="'Lexend','Inter',sans-serif" font-size="46" font-weight="700" fill="#ffffff">
+    <tspan x="64" y="246">Amazon Quick: trợ lý meeting</tspan>
+    <tspan x="64" y="304">biến cuộc họp thành task</tspan>
   </text>
 
-  <g transform="translate(64,420)">
-    <rect width="245" height="34" rx="17" fill="#14b8a6" fill-opacity="0.15"/>
-    <text x="16" y="23" font-family="'JetBrains Mono',monospace" font-size="15" fill="#14b8a6">amazon-quick · follow-up</text>
+  <!-- Chip: cắt góc nhẹ 7px, chữ 22px -->
+  <g transform="translate(64,392)">
+    <path d="M7 0 H273 L280 7 V37 L273 44 H7 L0 37 V7 Z" fill="#14b8a6" fill-opacity="0.15"/>
+    <text x="20" y="30" font-family="'JetBrains Mono',monospace" font-size="22" fill="#14b8a6">amazon-quick · ai</text>
   </g>
 
   <text x="64" y="566" font-family="'JetBrains Mono',monospace" font-size="18" fill="#8b93a1">Toan Nguyen<tspan fill="#14b8a6">.</tspan>devops</text>
 
-  <!-- Huy hiệu nhỏ góc phải trên -->
-  <g transform="translate(1040,56)">
-    <rect width="96" height="96" rx="20" fill="#ffffff" fill-opacity="0.06" stroke="#14b8a6" stroke-opacity="0.4"/>
-    <g transform="translate(24,24) scale(2)">
-      <use href="#quick"/>
-    </g>
-  </g>
+  <!-- Huy hiệu góc phải: icon trần, không ô vuông -->
+  <use href="#amazonq" x="1060" y="60" width="88" height="88" fill="#14b8a6"/>
 </svg>
