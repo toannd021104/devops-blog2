@@ -49,9 +49,9 @@
   --color-accent-fg: hsl(222 40% 10%);
   --color-accent-soft: hsl(243 40% 18%);
 
-  /* Inline code trong dark mode - tím sáng, nền tối dịu */
-  --color-code: hsl(243 90% 72%);
-  --color-code-soft: hsl(243 40% 18%);
+  /* Inline code trong dark mode - chữ sáng gần trắng cho dễ đọc, nền tím mờ giữ nhận diện */
+  --color-code: hsl(220 20% 92%);
+  --color-code-soft: hsl(243 40% 20%);
 }
 
 @layer base {
@@ -117,6 +117,44 @@
 
   .prose-blog :where(h3):not(:where([class~="not-prose"] *)) {
     scroll-margin-top: 6rem;
+  }
+
+  /*
+    Dark mode fix: ép heading, blockquote và chữ đậm dùng màu sáng.
+    Một số build của @tailwindcss/typography sinh màu heading/quote khá "cứng",
+    làm chúng chìm vào nền tối. Set tường minh theo token sáng của dark mode.
+  */
+  .dark .prose-blog {
+    --tw-prose-body: var(--color-fg);
+    --tw-prose-headings: var(--color-fg);
+    --tw-prose-bold: var(--color-fg);
+    --tw-prose-quotes: var(--color-fg);
+    --tw-prose-code: var(--color-fg);
+  }
+  /* Dùng selector có specificity thật (không :where) + !important để thắng typography */
+  .dark .prose-blog h1,
+  .dark .prose-blog h2,
+  .dark .prose-blog h3,
+  .dark .prose-blog h4,
+  .dark .prose-blog h5,
+  .dark .prose-blog h6,
+  .dark .prose-blog blockquote,
+  .dark .prose-blog strong,
+  .dark .prose-blog b {
+    color: var(--color-fg) !important;
+  }
+  /* Body text, list và ô bảng: màu chữ sáng rõ (không bị xám chìm) */
+  .dark .prose-blog p,
+  .dark .prose-blog li,
+  .dark .prose-blog td,
+  .dark .prose-blog th,
+  .dark .prose-blog dd,
+  .dark .prose-blog dt {
+    color: var(--color-fg) !important;
+  }
+  /* Inline code trong dark mode: chữ sáng gần trắng cho dễ đọc (nền tím mờ giữ nguyên) */
+  .dark .prose-blog :not(pre) > code {
+    color: var(--color-fg) !important;
   }
 
   /* Inline code: màu teal riêng, tách biệt với màu accent tím */
