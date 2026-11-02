@@ -1,0 +1,41 @@
+<svg width="1200" height="630" viewBox="0 0 1200 630" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#12161d"/>
+      <stop offset="1" stop-color="#0b0e13"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="80%" cy="28%" r="46%">
+      <stop offset="0" stop-color="#8b5cf6" stop-opacity="0.22"/>
+      <stop offset="1" stop-color="#8b5cf6" stop-opacity="0"/>
+    </radialGradient>
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M40 0H0V40" fill="none" stroke="#ffffff" stroke-opacity="0.04"/>
+    </pattern>
+    <!-- Glyph tự vẽ (đồng hồ + vòng lặp): agent chạy nền, tự thức dậy theo nhịp. Nền trong suốt, chỉ nét. -->
+    <symbol id="loop" viewBox="0 0 100 100">
+      <g fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="50" cy="50" r="24"/>
+        <path d="M50 36 V50 L60 57"/>
+        <path d="M14 44 A38 38 0 0 1 76 18"/>
+        <path d="M77 6 V19 H64"/>
+        <path d="M86 56 A38 38 0 0 1 24 82"/>
+        <path d="M23 94 V81 H36"/>
+      </g>
+    </symbol>
+  </defs>
+  <rect width="1200" height="630" fill="url(#bg)"/>
+  <rect width="1200" height="630" fill="url(#grid)"/>
+  <rect width="1200" height="630" fill="url(#glow)"/>
+  <use href="#loop" x="820" y="150" width="300" height="300" color="#8b5cf6" opacity="0.1"/>
+  <text x="64" y="150" font-family="'JetBrains Mono',monospace" font-size="30" letter-spacing="4" fill="#8b5cf6">AI</text>
+  <text font-family="'Lexend','Inter',sans-serif" font-size="48" font-weight="700" fill="#ffffff">
+    <tspan x="64" y="250">Always-on Agents</tspan>
+    <tspan x="64" y="308">Stanford CS146S</tspan>
+  </text>
+  <g transform="translate(64,390)">
+    <path d="M7 0 H349.8 L356.8 7 V37 L349.8 44 H7 L0 37 V7 Z" fill="#8b5cf6" fill-opacity="0.15"/>
+    <text x="20" y="30" font-family="'JetBrains Mono',monospace" font-size="22" fill="#8b5cf6">ai-agent · memory · loop</text>
+  </g>
+  <text x="64" y="566" font-family="'JetBrains Mono',monospace" font-size="18" fill="#8b93a1">Toan Nguyen<tspan fill="#8b5cf6">.</tspan>devops</text>
+  <use href="#loop" x="1060" y="60" width="88" height="88" color="#8b5cf6"/>
+</svg>
